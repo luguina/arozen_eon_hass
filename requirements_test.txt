@@ -1,0 +1,20 @@
+# Test dependencies, pinned to what the Home Assistant box actually runs. The point of
+# the suite is to catch a change breaking against the core this integration is deployed
+# on, not against whatever pip happened to resolve the day CI ran.
+#
+# These need Python 3.14. On 3.12 pip silently backtracks to Home Assistant 2025.1.4 and
+# on 3.13 to 2026.2.3 - both import cleanly and then test a core nobody runs. The venv
+# used for probing (.venv, tinytuya on 3.12) is NOT the test venv; use .venv-test, built
+# from the uv-managed 3.14.
+homeassistant==2026.8.1
+pytest==9.1.1
+pytest-asyncio==1.3.0
+
+# The integration's own manifest requirement, repeated here because the tests import
+# device.py directly - Home Assistant only installs manifest requirements when it loads
+# the integration, which the test venv never does.
+tinytuya==1.20.0
+
+# Pinned on purpose: an unpinned ruff picks up new rules on release and turns CI red
+# on a morning nobody changed anything.
+ruff==0.16.3

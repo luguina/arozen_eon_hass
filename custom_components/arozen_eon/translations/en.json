@@ -1,0 +1,34 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to the diffuser",
+        "description": "Device ID, local key and protocol version come from the recon step (tuya-local-key QR login or `tinytuya wizard`). The local key is a live credential — it is stored in Home Assistant's config entry like any other integration secret.",
+        "data": {
+          "host": "IP address",
+          "device_id": "Device ID",
+          "local_key": "Local key",
+          "protocol_version": "Protocol version"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "The device did not answer with these credentials. Check the IP address, local key and protocol version.",
+      "unknown": "[%key:common::config_flow::error::unknown%]"
+    },
+    "abort": {
+      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Polling",
+        "description": "How often to read the device. Lower is fresher but competes with the Tuya app, which may share the device's single local connection.",
+        "data": {
+          "poll_interval": "Poll interval (seconds)"
+        }
+      }
+    }
+  }
+}

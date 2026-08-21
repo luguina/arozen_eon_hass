@@ -1,0 +1,47 @@
+# --- Tuya credentials (THE local_key IS A LIVE CREDENTIAL — see README) ---
+# Default output filenames of `tinytuya wizard` and friends. These contain local keys in
+# plaintext. Adding one to this repo hands working control of the device to anyone who
+# clones it.
+devices.json
+snapshot.json
+tinytuya.json
+raw.json
+tuya-raw.json
+tuya-devices.json
+*device*.json
+*.localkey
+localkey*
+credentials*
+secrets.yaml
+.env
+*.key
+
+# --- Capture artefacts (may contain local keys, device IDs, WiFi details, account tokens) ---
+*.log
+*.pcap
+*.pcapng
+*.har
+bugreport*
+*.zip
+*.apk
+*.dex
+*.jadx*
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+.venv-test/
+venv/
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Scratch (third-party tools, clones; may contain cached sessions) ---
+.cache/
+
+# --- Editors ---
+.vscode/
+.idea/
+*.swp

@@ -1,0 +1,19 @@
+{
+  "domain": "arozen_eon",
+  "name": "Arozen EON Pro 2 Diffuser",
+  "codeowners": [
+    "@luguina"
+  ],
+  "config_flow": true,
+  "documentation": "https://github.com/luguina/arozen_ha_controller",
+  "integration_type": "device",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/luguina/arozen_ha_controller/issues",
+  "loggers": [
+    "tinytuya"
+  ],
+  "requirements": [
+    "tinytuya>=1.16.0"
+  ],
+  "version": "0.1.0"
+}
