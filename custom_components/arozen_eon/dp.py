@@ -32,7 +32,10 @@ from typing import Any, Final
 #: * the countdown is reset - DP 4 to "3h", DP 5 to 240 minutes. An "8h" setting became
 #:   "3h" on the next power-on, so this overwrites a choice rather than filling a blank.
 #:
-#: Powering **off** moves this DP and nothing else.
+#: Powering **off** never touches intensity or the countdown - unanimous across all six
+#: captured off-edges. It is not DP 2 alone as a rule, though: two of the six also took DP 7
+#: (the LED) down with it. The established claim is about intensity and the countdown, and
+#: this comment deliberately does not stretch it into "no other datapoint moves".
 #:
 #: An earlier revision of this comment said the opposite: that the *off* reset the settings,
 #: and that the phone app avoided it by sending something more than a DP 2 write. Both

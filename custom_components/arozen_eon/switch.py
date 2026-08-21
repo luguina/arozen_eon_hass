@@ -17,8 +17,10 @@ integration does not hide that, because pretending otherwise would make the enti
 * the countdown is reset — DP 4 to "3h", DP 5 to 240 minutes — overwriting a deliberate
   setting, not just filling an empty one.
 
-Both land in the same status record as the power change. Turning **off** moves DP 2 and
-nothing else.
+Both land in the same status record as the power change. Turning **off** never touches
+intensity or the countdown -- unanimous across all six captured off-edges -- though two of
+those six also took DP 7 (the LED) down with DP 2. The established claim is about the
+settings this entity would otherwise be blamed for losing, not about DP 2 moving alone.
 
 This was measured on the physical remote with the phone app closed, and then on the app
 itself (docs/captures/remote-walk-2026-08-21.jsonl): three power-ons from two sources, all
