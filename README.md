@@ -62,14 +62,14 @@ reads status, so a wrong key or version fails here rather than silently later.
 | **Local key** | Same. ⚠️ This is a **live credential** — see [below](#about-the-local_key) |
 | **Protocol version** | `3.5` for this unit. `tinytuya scan` reports it |
 
-Two ways to get the device ID and local key, neither of which needs a Tuya IoT developer
-account any more:
+Two ways to get the device ID and local key:
 
 - **[`tuya-local-key`](https://github.com/vineetchoudhary/tuya-local-key)** — QR login against
-  Tuya's device-sharing SDK. Runs as a CLI, a Docker container or a Home Assistant add-on.
-  QR codes expire in a minute or two, so have the phone open before you start.
-- **`tinytuya wizard`** — the classic route. Wants an IoT platform project with an Access
-  ID/Secret, and the trial expires.
+  Tuya's device-sharing SDK, and **no Tuya IoT developer account needed**, which removes what
+  used to be the worst part of this job. Runs as a CLI, a Docker container or a Home Assistant
+  add-on. QR codes expire in a minute or two, so have the phone open before you start.
+- **`tinytuya wizard`** — the classic route, and the one that *does* want a Tuya IoT platform
+  project with an Access ID and Secret. The trial expires and needs periodic renewal.
 
 Detail and gotchas: [datapoints.md §Method](docs/datapoints.md#1-get-the-credentials).
 
