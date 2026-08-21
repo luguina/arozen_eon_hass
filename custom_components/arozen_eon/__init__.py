@@ -23,8 +23,13 @@ _LOGGER = logging.getLogger(__name__)
 # No NUMBER platform: unlike the sibling project, intensity here is a single enum DP (DP 3), not a
 # settable work/pause pair - the pause seconds (DP 106) are a read-only mirror, exposed as
 # an attribute on the intensity select, and the burst length (DP 105) is fixed at 30 s.
+#
+# BINARY_SENSOR carries exactly one entity, "Misting" (DP 103). It is a platform rather
+# than an attribute on the switch because it is a genuinely separate state: the switch says
+# whether the duty cycle is running, this says whether the nozzle is open right now.
 PLATFORMS: list[Platform] = [
     Platform.SWITCH,
+    Platform.BINARY_SENSOR,
     Platform.SELECT,
     Platform.SENSOR,
 ]

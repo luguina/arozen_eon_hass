@@ -10,8 +10,9 @@ Three kinds of sensor, deliberately:
   the device, unlike the diagnostics.
 * **Datapoints** — the raw DP set, exposed as attributes. This was the recon phase's primary
   instrument inside Home Assistant, before the map existed. It stays as scaffolding while
-  docs/datapoints.md has open questions (DP 2, 102, 104) — it is how new DPs would be
-  noticed — and can be deleted once the map settles.
+  docs/datapoints.md has open questions (DP 102, 104) — it is how new DPs would be noticed —
+  and can be deleted once the map settles. DP 2 came off that list the hard way: it was the
+  power switch all along, sitting unidentified while the switch entity wrote to the valve.
 """
 
 from __future__ import annotations
@@ -131,10 +132,10 @@ class ArozenCountdownRemainingSensor(ArozenEntity, SensorEntity):
 class ArozenDatapointsSensor(ArozenDiagnosticSensor):
     """The raw DP set, as reported by the last successful poll.
 
-    Scaffolding for the recon phase: docs/datapoints.md is empty and this is the way to
-    watch the DPs change while toggling controls in the Tuya app, from the Home Assistant
-    UI. State is the count of DPs seen; the set itself is in the attributes. Delete this
-    entity once real entities exist for the mapped functions.
+    Scaffolding from the recon phase, kept while DP 102 and 104 are still unidentified:
+    it is the way to watch DPs move while toggling controls in the Tuya app, from the Home
+    Assistant UI. State is the count of DPs seen; the set itself is in the attributes.
+    Delete this entity once the map settles.
     """
 
     _attr_name = "Datapoints (recon)"

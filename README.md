@@ -92,7 +92,7 @@ control at a time and diffing, not a reverse-engineering project.
 
 ## Current phase
 
-**Recon, third sitting — root cause found; the local path is the open question.**
+**Working integration; one behavioural question left.**
 
 | | |
 |---|---|
@@ -100,15 +100,17 @@ control at a time and diffing, not a reverse-engineering project.
 | ✅ Settled | Generic Tuya Smart app, so it is a standard Tuya registration and QR login will work — and did, 2026-08-21 |
 | ✅ Settled | No ESP32 ([ADR-002](docs/decisions.md#adr-002--no-esp32-the-device-is-already-on-the-network)) |
 | ✅ Found 2026-08-21 | Category `xxj`, product `uh3xooop1btksbtk`, `local_key` retrieved. **The "no entities" root cause: the product's registered cloud schema is empty** ([dossier §6.4](docs/research/dossier.md#64-the-products-registered-cloud-schema-is-empty----the-real-no-entities-cause)) |
-| ✅ Decided 2026-08-21 | The deliverable is **our own integration** — `custom_components/arozen_eon/` exists, scaffolded against `sibling_beacon`'s architecture ([ADR-003](docs/decisions.md#adr-003--defer-the-deliverable-until-the-datapoint-dump-exists), resolved by the project owner) |
-| ❌ Failing | **Local reachability** — the unit is online in the cloud but neither broadcasts nor listens on TCP 6668 anywhere reachable ([dossier §6.3](docs/research/dossier.md#63-the-arozen-is-not-reachable-on-the-lan--as-of-2026-08-21)). ADR-001's precondition does not currently hold |
-| ❓ Unknown | **Every single datapoint** — being filled in via the cloud message stream (`tools/mq_listen.py`) while the local path is sorted out |
+| ✅ Decided 2026-08-21 | The deliverable is **our own integration** — `custom_components/arozen_eon/` ([ADR-003](docs/decisions.md#adr-003--defer-the-deliverable-until-the-datapoint-dump-exists), resolved by the project owner) |
+| ✅ Resolved 2026-08-21 | **Local reachability.** The unit had silently dropped off; re-pairing put it on the main LAN at protocol 3.5, and it answers local reads and writes ([dossier §6.3](docs/research/dossier.md)) |
+| ✅ Mapped 2026-08-21 | **The datapoints**, from a control walk plus write tests — power, intensity, timer, nozzle state, battery ([datapoints.md](docs/datapoints.md)). Corrected the same evening: DP 103 is the nozzle, not the switch ([dossier §6.7](docs/research/dossier.md)) |
+| ❓ Open | **What the app's power-off sends.** A `DP 2 = false` write stops the device but resets intensity to L1; the app's own off preserves it. Until that is known, switching off from Home Assistant loses the intensity setting |
+| ❓ Open | DP 102 (`zzcd`/`wcd`/`cdwc`) and DP 104 (`kk`) remain unidentified |
 | ⏸️ Pending the owner | Whether the phone app has to keep working ([ADR-004](docs/decisions.md#adr-004--pending--must-the-phone-app-keep-working)) |
 
-The scaffold deliberately encodes no DP guesses: [`dp.py`](custom_components/arozen_eon/dp.py)
-maps only power (DP 1, marked hypothesis), and platforms backed by unmapped functions create
-no entities until the dump fills the file in. The recon loop is now two commands —
-see [tools/README.md](tools/README.md).
+[`dp.py`](custom_components/arozen_eon/dp.py) is the only file that knows a DP number, and it
+now separates **command** datapoints from **status** ones — a distinction the first pass did
+not make, which cost it the power switch. Platforms backed by unmapped functions still create
+no entities. The recon loop is four commands — see [tools/README.md](tools/README.md).
 
 ## Scope
 
@@ -121,20 +123,26 @@ scheduling from Home Assistant.
 
 ```
 custom_components/
-  arozen_eon/           the integration (ADR-003, resolved 2026-08-21). Scaffolded against
-                        sibling_beacon's architecture; dp.py is the only file that knows a
-                        DP number, and only power is mapped so far.
+  arozen_eon/           the integration (ADR-003, resolved 2026-08-21), built on
+                        sibling_beacon's architecture. dp.py is the only file that knows a
+                        DP number and the only place a map correction lands.
+    switch.py           power — DP 2, the command DP
+    binary_sensor.py    "Misting" — DP 103, the nozzle state the device drives itself
+    select.py           intensity (DP 3) and countdown (DP 4)
+    sensor.py           battery, timer remaining, poll diagnostics, raw-DP recon readout
 docs/
-  datapoints.md         the DP map — the one document that has to be filled in.
-                        Identity known since 2026-08-21; the DP table is still empty.
-  research/dossier.md   recon record: what is inferred, what is verified, and the
-                        evidence for the "no entities" diagnosis
+  datapoints.md         the DP map — filled in 2026-08-21, with its open questions kept
+                        explicit rather than rounded up to answers
+  research/dossier.md   recon record: what is inferred, what is verified, the evidence for
+                        the "no entities" diagnosis, and §6.7's correction
   hardware.md           the device, its power and radio, and what to measure
   decisions.md          ADR-001…005
   captures/             probe output and DP diffs (credentials redacted)
 tools/
   dp_dump.py            read all DPs as a stable, diffable table
   dp_diff.py            diff two dumps, show only what moved
+  dp_watch.py           poll on an interval, print one line per DP that moves
+  dp_set.py             write a single DP (the explicit mutating exception)
   README.md             usage and the redaction discipline for probe output
 tests/                  pytest suite — test_dp.py runs with no HA installed;
                         test_entities.py needs the .venv-test venv (Python 3.14, HA pinned

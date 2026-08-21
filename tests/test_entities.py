@@ -22,6 +22,7 @@ import pytest
 pytest.importorskip("homeassistant", reason="entity tests need Home Assistant installed")
 
 from custom_components.arozen_eon.coordinator import PollHealth
+from custom_components.arozen_eon.binary_sensor import ArozenMistingBinarySensor
 from custom_components.arozen_eon.switch import ArozenPowerSwitch
 
 
@@ -91,31 +92,75 @@ def test_switch_is_none_before_first_read():
 
 
 def test_switch_reads_power_dp():
-    # Power is the string DP 103: "kai" on, "guan" off. bool("guan") would be True,
-    # which is exactly the bug this comparison exists to avoid.
-    assert ArozenPowerSwitch(FakeCoordinator(data={"103": "kai"})).is_on is True
-    assert ArozenPowerSwitch(FakeCoordinator(data={"103": "guan"})).is_on is False
+    # Power is the bool DP 2, write-verified both ways on the device.
+    assert ArozenPowerSwitch(FakeCoordinator(data={"2": True})).is_on is True
+    assert ArozenPowerSwitch(FakeCoordinator(data={"2": False})).is_on is False
 
 
 def test_switch_is_none_when_power_dp_absent():
     # The device answered, but not with the DP we mapped - unknown, not a guess.
-    assert ArozenPowerSwitch(FakeCoordinator(data={"2": True})).is_on is None
+    assert ArozenPowerSwitch(FakeCoordinator(data={"101": 90})).is_on is None
+
+
+def test_switch_ignores_the_valve_dp():
+    """The regression this whole entity was rebuilt for.
+
+    DP 103 is the valve, which the device opens for 30 s and closes for the pause
+    interval on its own. A switch reading it reports the diffuser as off for most of
+    every cycle while it is running perfectly well - and, worse, writing it never turned
+    the device on at all. Power must come from DP 2 and nothing else.
+    """
+    running_but_between_bursts = FakeCoordinator(data={"2": True, "103": "guan"})
+    assert ArozenPowerSwitch(running_but_between_bursts).is_on is True
+
+    off_but_valve_stale = FakeCoordinator(data={"2": False, "103": "kai"})
+    assert ArozenPowerSwitch(off_but_valve_stale).is_on is False
 
 
 @pytest.mark.asyncio
-async def test_switch_turn_on_writes_kai():
-    coordinator = FakeCoordinator(data={"103": "guan"})
+async def test_switch_turn_on_writes_power_dp_true():
+    coordinator = FakeCoordinator(data={"2": False})
     switch = ArozenPowerSwitch(coordinator)
     await switch.async_turn_on()
-    assert coordinator.writes == [(103, "kai")]
+    assert coordinator.writes == [(2, True)]
 
 
 @pytest.mark.asyncio
-async def test_switch_turn_off_writes_guan():
-    coordinator = FakeCoordinator(data={"103": "kai"})
+async def test_switch_turn_off_writes_power_dp_false():
+    coordinator = FakeCoordinator(data={"2": True})
     switch = ArozenPowerSwitch(coordinator)
     await switch.async_turn_off()
-    assert coordinator.writes == [(103, "guan")]
+    assert coordinator.writes == [(2, False)]
+
+
+@pytest.mark.asyncio
+async def test_switch_never_writes_the_valve_dp():
+    # Belt and braces on the same regression: whatever the switch does, DP 103 is not
+    # part of it. The device owns that DP.
+    for action in ("async_turn_on", "async_turn_off"):
+        coordinator = FakeCoordinator(data={"2": True, "103": "kai"})
+        await getattr(ArozenPowerSwitch(coordinator), action)()
+        assert all(written_dp != 103 for written_dp, _ in coordinator.writes)
+
+
+# -- Misting binary sensor ----------------------------------------------------------------
+
+
+def test_misting_is_none_before_first_read():
+    assert ArozenMistingBinarySensor(FakeCoordinator(data=None)).is_on is None
+
+
+def test_misting_reads_the_valve_dp():
+    # bool("guan") is True, which is exactly the bug this comparison avoids.
+    assert ArozenMistingBinarySensor(FakeCoordinator(data={"103": "kai"})).is_on is True
+    assert ArozenMistingBinarySensor(FakeCoordinator(data={"103": "guan"})).is_on is False
+
+
+def test_misting_exposes_the_duty_cycle():
+    sensor = ArozenMistingBinarySensor(
+        FakeCoordinator(data={"103": "kai", "105": 30, "106": 300})
+    )
+    assert sensor.extra_state_attributes == {"work_seconds": 30, "pause_seconds": 300}
 
 
 # -- Availability -------------------------------------------------------------------------

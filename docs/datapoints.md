@@ -90,16 +90,17 @@ plus local write tests with `tools/dp_set.py` the same evening. Full DP set as f
 
 | DP | Type | Observed values | Function | How established |
 |---|---|---|---|---|
-| 2 | bool | `true`, `false` | ❓ unknown. Accepts writes, but they do not drive power or anything else observed. Flipped once during the walk without an obvious corresponding action | write test 2026-08-21 (no effect seen) |
+| 2 | bool | `true`, `false` | **Power.** Writing `true` starts the device — it begins a mist burst within ~2 s; writing `false` stops it. ⚠️ Two side effects, both observed: powering **on** arms a countdown by itself (DP 5 → 240 while DP 4 still reads `untime`), and powering **off** resets intensity to L1 and the countdown to `3h`. The phone app's own off preserves both, so the app sends more than a DP 2 write | write test 2026-08-21 ✅ both directions |
 | 3 | enum string | `L1`…`L6` | **Intensity level.** Writing it is accepted and DP 106 mirrors it: L1→60, L2→180, L3→300, L4→600, L6→2400 (L5 unobserved, presumably 1200) | walk + write test ✅ |
 | 4 | enum string | `untime`, `1h`, `3h`, `8h` | **Countdown setting.** Writing it is accepted and DP 5 mirrors the remaining minutes: `1h`→60, `3h`→240, `8h`→480, `untime`→0. ⚠️ `3h`↔240 min is what the device does, mislabel or not; `2h` never observed | walk + write test ✅ |
-| 5 | int | 0–480, ticks down | **Countdown remaining, minutes.** Watched decrement 240→239 during the walk | walk ✅ (read-only assumed) |
-| 101 | int | 99, 100 | **Battery %, almost certainly.** Went 99→100 while plugged in; the vendor copy's "battery-operated" turns out to be true alongside mains | walk 🔵 (strong inference) |
+| 5 | int | 0–480, ticks down | **Countdown remaining, minutes.** Watched decrement 240→239 during the walk. Not a pure mirror of DP 4: a power-on sets it to 240 while DP 4 still reads `untime`, so DP 4 is the request and DP 5 is what the device actually armed | walk ✅ + power-on test ✅ |
+| 7 | bool | `false` | ❓ unknown, and **new**: absent from every dump taken during the control walk, present 2026-08-21 late while the device sat powered off. A DP that appears partway through recon is worth watching — it may only be reported in certain states | live read 2026-08-21 ❓ |
+| 101 | int | 91–100 | **Battery %, almost certainly.** Went 99→100 while plugged in, then fell ~1%/minute while running — including straight through pause phases, which is discharge rather than mist consumption, and is the observation that rules out oil level | walk + duty-cycle measurement 🔵 (strong inference) |
 | 102 | string | `zzcd`, `wcd`, `cdwc` | ❓ unknown. Moved only between walk phases, never in step with a single control. Looks like pinyin fragments; possibly a mode or program-state string | walk ❓ |
-| 103 | string | `kai` (开/on), `guan` (关/off) | **Power state** — tracks every app power toggle. **Command semantics unresolved:** writing `guan` sticks (turns off); writing `kai` is acknowledged but reverted by the device, and once armed DP 4/5 as a side effect | walk ✅ state; write test ❓ on-command |
+| 103 | string | `kai` (开/open), `guan` (关/closed) | **Nozzle state — status, not command.** The device cycles it itself: `kai` for DP 105 seconds, then `guan` for DP 106 seconds, indefinitely. It tracks app power toggles because power *causes* misting, which is what made it look like the power DP. Do not write it: `guan` merely interrupts the current burst, `kai` is reverted by the duty-cycle controller | duty-cycle measurement 2026-08-21 ✅ |
 | 104 | string | `kk` | ❓ unknown. Never moved | walk ❓ |
 | 105 | int | 30 | **Work (burst) seconds, apparently fixed at 30.** Never moved; no app control touched it | walk 🔵 |
-| 106 | int | 60–2400 | **Pause seconds — read-only mirror of DP 3.** Follows every DP 3 write; direct writes untested | walk + write test ✅ |
+| 106 | int | 60–2400 | **Pause seconds — read-only mirror of DP 3.** Follows every DP 3 write *while the device is running*; written while powered off, DP 3 changes and 106 keeps its old value until the next power-on. Direct writes untested | walk + write test ✅ |
 
 Fill `How established` honestly. `"toggled power in app, DP 1 flipped"` is evidence.
 `"probably intensity"` is not, and should say so.
@@ -175,11 +176,23 @@ describes what the product was defined as, the dump describes what the firmware 
 Kept as an explicit list because on the sibling project the equivalent section was what stopped
 half-answers being treated as answers.
 
-- **The ON command.** `guan` written to DP 103 turns the device off; `kai` is acknowledged and
-  reverted. Either "on" needs something more than the state DP (a companion write, a mode, a
-  physical condition), or DP 103 is state-only in the on direction and the command lives
-  elsewhere. Blocked on physical observation: did the unit mist during the write tests?
-- DP 2's function; DP 102's values (`zzcd`/`wcd`/`cdwc`); DP 104 (`kk`).
+- ~~**The ON command.**~~ ✅ **Resolved 2026-08-21 (evening).** It was DP 2 all along — the
+  bool sitting in this very list as "unknown". Writing `true` starts the device; `false` stops
+  it. The reason it took a second sitting to find: DP 103 moves whenever power is toggled, so
+  it read as the power DP, and every attempt to fix "on" went into writing *harder* to a
+  datapoint the device owns. The lesson is the generalisable one — **a DP that correlates with
+  a control is not necessarily the control.** Deciding whether a DP is a command or a status
+  needs a measurement with *nothing writing to it*, which is what finally settled it: left
+  untouched, 103 cycled on its own.
+- **What the app's power-off does that a DP 2 write does not.** Writing `false` resets intensity
+  to L1 and the countdown to `3h`; the app's own off preserves both. So the app sends a
+  compound command, or a different DP entirely. Until this is known, the Home Assistant switch
+  resets the user's intensity on every off — documented in `switch.py`, not hidden.
+- **Why power-on arms a 240-minute countdown.** DP 5 → 240 within 2 s of `2=true`, with DP 4
+  still reading `untime`. Presumably a firmware default auto-off. Harmless, but it means the
+  countdown sensor reads non-zero after every switch-on.
+- DP 102's values (`zzcd`/`wcd`/`cdwc`); DP 104 (`kk`); DP 7, which the device only started
+  reporting after the control walk and so was never exercised by it.
 - The intensity enum's full extent: L5 unobserved; whether L1…L6 is the whole range.
 - The timer enum's full extent: `2h` never observed; why `3h` maps to 240 minutes.
 - Whether the schedule the app created lives anywhere readable — it moved **no** DP during the
@@ -189,12 +202,15 @@ half-answers being treated as answers.
 - Whether writing a DP while the app is connected is accepted, rejected, or silently reverted
   — the contention seen during the write tests (null answers, one 914) is consistent with the
   app holding the single local connection. ADR-004's measurement, partially already made.
-- Whether DP 101 is battery or oil level. Battery is the strong favourite (rose to 100 while
-  plugged in); oil would be the find of the project.
+- Whether DP 101 is battery or oil level. Battery, near-certainly: it rose to 100 while plugged
+  in, and it falls at a steady ~1%/minute while running — *including through the pause phases,
+  when no mist is being produced*. Oil level would only fall while misting. Not closed outright
+  because nothing has confirmed it against the unit's own battery indicator.
 
 ## Change log
 
 | Date | What |
 |---|---|
 | 2026-08-10 | Created. Standard `xxj` set recorded as the hypothesis; nothing observed yet. |
+| 2026-08-21 (evening) | **Correction.** DP 103 reclassified from power *command* to nozzle *status*: measured untouched, it cycles itself (30 s open / pause-interval closed). Power is DP 2, write-verified both directions. The integration's switch was rewritten onto DP 2 and 103 became a read-only `binary_sensor`. |
 | 2026-08-21 | First contact: `tinytuya scan`, then QR login for the `local_key`; category `xxj` confirmed; **registered cloud schema found EMPTY** (the real "no entities" cause). Re-pair put the device on the LAN (v3.5). Control walk + write tests: DP table filled — intensity (3, mirrored by 106), timer (4, mirrored by 5), power state (103), battery (101), fixed work time (105). The hypothesis was wrong in detail — the standard `xxj` codes appear nowhere; every meaningful DP is vendor-specific — and right in spirit. ON command unresolved. |
