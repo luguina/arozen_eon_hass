@@ -9,6 +9,9 @@ rest of the interval, with no write involved.
 Reading it is genuinely useful — it is the only way to see the device working from Home
 Assistant, and it makes "on but not currently misting" legible rather than looking like a
 fault. Writing it is not: see switch.py and dp.py.
+
+One correction the raw DP needs: the device freezes this datapoint while powered off, so
+it must be gated on power. See ``is_on``.
 """
 
 from __future__ import annotations
@@ -53,13 +56,25 @@ class ArozenMistingBinarySensor(ArozenEntity, BinarySensorEntity):
     def is_on(self) -> bool | None:
         """Whether the nozzle is open. None until the first successful read.
 
+        **Gated on power, and that gate is not cosmetic.** The device freezes its status
+        datapoints when it is switched off: DP 103 keeps whatever value it held at the
+        moment power went away, indefinitely. Switch the diffuser off mid-burst and it
+        reports ``"kai"`` for as long as it sits idle — measured still ``"kai"`` minutes
+        later, with DP 2 false throughout. Reporting that raw would mean an idle diffuser
+        claiming to be misting until someone switched it on again.
+
+        So a device that is not running is not misting, full stop. This is not inventing
+        state; it is refusing to read a frozen register as a live one. The same freeze
+        affects DP 106 (see dp.py), and the raw string stays visible on the recon sensor.
+
         Comparison against the known-on value, not truthiness: the DP reports the strings
         "kai"/"guan", and a bare bool("guan") is True — the classic string-enum-as-boolean
-        bug. An unrecognised value reads as off rather than raising; the raw string is
-        still visible on the recon sensor if a third state ever shows up.
+        bug. An unrecognised value reads as off rather than raising.
         """
         if self.coordinator.data is None:
             return None
+        if dp.get(self.coordinator.data, dp.DP_POWER) is False:
+            return False
         value = dp.get(self.coordinator.data, dp.DP_MISTING)
         return None if value is None else value == dp.MISTING_ON
 

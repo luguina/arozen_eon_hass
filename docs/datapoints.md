@@ -99,7 +99,7 @@ the only source that covers L5. Full DP set as first observed
 | 7 | bool | `false` | ❓ unknown, and **new**: absent from every dump taken during the control walk, present 2026-08-21 late while the device sat powered off. A DP that appears partway through recon is worth watching — it may only be reported in certain states | live read 2026-08-21 ❓ |
 | 101 | int | 91–100 | **Battery %, almost certainly.** Went 99→100 while plugged in, then fell ~1%/minute while running — including straight through pause phases, which is discharge rather than mist consumption, and is the observation that rules out oil level | walk + duty-cycle measurement 🔵 (strong inference) |
 | 102 | string | `zzcd`, `wcd`, `cdwc` | ❓ unknown. Moved only between walk phases, never in step with a single control. Looks like pinyin fragments; possibly a mode or program-state string | walk ❓ |
-| 103 | string | `kai` (开/open), `guan` (关/closed) | **Nozzle state — status, not command.** The device cycles it itself: `kai` for DP 105 seconds, then `guan` for DP 106 seconds, indefinitely. It tracks app power toggles because power *causes* misting, which is what made it look like the power DP. Do not write it: `guan` merely interrupts the current burst, `kai` is reverted by the duty-cycle controller | duty-cycle measurement 2026-08-21 ✅ |
+| 103 | string | `kai` (开/open), `guan` (关/closed) | **Nozzle state — status, not command.** The device cycles it itself: `kai` for DP 105 seconds, then `guan` for DP 106 seconds, indefinitely. ⚠️ **Frozen while powered off**: switch off mid-burst and it reports `kai` indefinitely (measured still `kai` minutes later with DP 2 false), so it is a live reading only while running. It tracks app power toggles because power *causes* misting, which is what made it look like the power DP. Do not write it: `guan` merely interrupts the current burst, `kai` is reverted by the duty-cycle controller | duty-cycle measurement 2026-08-21 ✅ |
 | 104 | string | `kk` | ❓ unknown. Never moved | walk ❓ |
 | 105 | int | 30 | **Work (burst) seconds, fixed at 30 by design.** The manual specifies a 30 s emission at every one of the six levels, so this is a firmware constant rather than a sampling artefact. Never moved; no app control touches it | walk + manual ✅ |
 | 106 | int | 60–2400 | **Pause seconds — read-only mirror of DP 3.** Follows every DP 3 write *while the device is running*; written while powered off, DP 3 changes and 106 keeps its old value until the next power-on. Direct writes untested | walk + write test ✅ |
@@ -193,6 +193,10 @@ half-answers being treated as answers.
 - **Why power-on arms a 240-minute countdown.** DP 5 → 240 within 2 s of `2=true`, with DP 4
   still reading `untime`. Presumably a firmware default auto-off. Harmless, but it means the
   countdown sensor reads non-zero after every switch-on.
+- **Which status DPs freeze when the device is off, and which do not.** Confirmed frozen:
+  DP 103 (nozzle) and DP 106 (pause mirror, which will not follow a DP 3 write while off).
+  Assume any status DP on this device is stale until proven live — the integration gates
+  the misting sensor on power for exactly this reason.
 - DP 102's values (`zzcd`/`wcd`/`cdwc`); DP 104 (`kk`); DP 7, which the device only started
   reporting after the control walk and so was never exercised by it.
 - ~~The intensity enum's full extent.~~ ✅ Closed by the manual (the project owner, 2026-08-21): L1–L6 is the whole range, pauses 1/3/5/10/20/40 min against a fixed 30 s emission. L5 remains the one level never seen on the wire, but it is now sourced rather than inferred.

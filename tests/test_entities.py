@@ -156,6 +156,31 @@ def test_misting_reads_the_valve_dp():
     assert ArozenMistingBinarySensor(FakeCoordinator(data={"103": "guan"})).is_on is False
 
 
+def test_misting_is_false_when_power_is_off_even_if_the_dp_says_kai():
+    """The device freezes DP 103 when switched off, so the raw value goes stale.
+
+    Switch it off mid-burst and it reports "kai" indefinitely - measured still "kai"
+    minutes later with DP 2 false. Without this gate an idle diffuser claims to be
+    misting until someone switches it on again. Found by running the integration in
+    real Home Assistant and calling switch.turn_off, not by any unit test.
+    """
+    frozen = FakeCoordinator(data={"2": False, "103": "kai"})
+    assert ArozenMistingBinarySensor(frozen).is_on is False
+
+
+def test_misting_still_reads_the_dp_while_running():
+    # The gate must not swallow the real signal: powered on, the DP is live.
+    running = FakeCoordinator(data={"2": True, "103": "kai"})
+    assert ArozenMistingBinarySensor(running).is_on is True
+    paused = FakeCoordinator(data={"2": True, "103": "guan"})
+    assert ArozenMistingBinarySensor(paused).is_on is False
+
+
+def test_misting_unknown_when_power_unknown():
+    # No power DP reported: we cannot say the device is idle, so do not claim it.
+    assert ArozenMistingBinarySensor(FakeCoordinator(data={"103": "kai"})).is_on is True
+
+
 def test_misting_exposes_the_duty_cycle():
     sensor = ArozenMistingBinarySensor(
         FakeCoordinator(data={"103": "kai", "105": 30, "106": 300})

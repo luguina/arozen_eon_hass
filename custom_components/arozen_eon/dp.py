@@ -45,6 +45,11 @@ DP_POWER: Final[int | None] = 2
 #: as "it turned off" and is what made this look like the power DP), and ``kai`` is
 #: acknowledged and then reverted by the duty-cycle controller. The integration reads it
 #: and never writes it.
+#:
+#: ⚠️ **Frozen while the device is off.** Switching off mid-burst leaves this reporting
+#: ``"kai"`` indefinitely - measured still ``"kai"`` minutes later with DP_POWER false.
+#: It is a live reading only while the device is running, so binary_sensor.py gates it on
+#: power. DP_PAUSE_S freezes the same way; assume any status DP on this device does.
 DP_MISTING: Final[int | None] = 103
 MISTING_ON: Final = "kai"
 MISTING_OFF: Final = "guan"
