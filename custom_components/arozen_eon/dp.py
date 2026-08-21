@@ -130,7 +130,7 @@ DP_BATTERY: Final[int | None] = 101
 #: gauge still climbing to 100 twenty seconds later (docs/captures/dp-watch-2026-08-21.txt).
 #: Nor is it stable: a mist burst taken at 100/"cdwc" dropped the gauge to 96 and flipped this
 #: to "zzcd" in the same poll, and it had not returned eight minutes and two further bursts
-#: later (docs/captures/charging-cdwc-2026-08-22.jsonl). It *had* returned when the device was
+#: later (docs/captures/charging-cdwc-2026-08-22.txt). It *had* returned when the device was
 #: read again five minutes after that capture stopped - so the round trip does complete, but
 #: the "zzcd" -> "cdwc" edge itself has still never been caught in a capture, and no code here
 #: assumes anything about how long it takes.

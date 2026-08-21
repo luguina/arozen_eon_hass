@@ -127,7 +127,7 @@ class ArozenChargingBinarySensor(ArozenEntity, BinarySensorEntity):
     attribute proves awkward in practice, adding that sensor later is purely additive.
 
     ⚠️ **Expect this to flap while the diffuser runs on mains, and do not read that as a
-    fault.** Measured 2026-08-22 (docs/captures/charging-cdwc-2026-08-22.jsonl): sitting at
+    fault.** Measured 2026-08-22 (docs/captures/charging-cdwc-2026-08-22.txt): sitting at
     ``cdwc`` with DP 101 at 100, the next mist burst took the gauge to 96 and DP 102 to
     ``zzcd`` in the same poll. It stayed charging at 99 for the following eight minutes and
     two further bursts without returning to ``cdwc``. So ``cdwc`` is a state a burst
