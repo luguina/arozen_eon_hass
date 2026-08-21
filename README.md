@@ -110,7 +110,8 @@ control at a time and diffing, not a reverse-engineering project.
 [`dp.py`](custom_components/arozen_eon/dp.py) is the only file that knows a DP number, and it
 now separates **command** datapoints from **status** ones — a distinction the first pass did
 not make, which cost it the power switch. Platforms backed by unmapped functions still create
-no entities. The recon loop is four commands — see [tools/README.md](tools/README.md).
+no entities. The recon loop is `dp_dump` → `dp_watch` → `dp_set` → `dp_diff`, spelled out in
+[tools/README.md](tools/README.md#the-recon-loop-in-four-commands).
 
 ## Scope
 

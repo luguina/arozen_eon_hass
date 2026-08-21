@@ -84,22 +84,24 @@ just not one to plan around.
 ### Datapoints
 
 Evidence: [captures/dp-watch-2026-08-21.txt](captures/dp-watch-2026-08-21.txt) (control walk),
-plus local write tests with `tools/dp_set.py` the same evening. Full DP set as first observed
+local write tests with `tools/dp_set.py` the same evening, a duty-cycle measurement taken with
+nothing writing to the device, and — for the intensity table — **the printed manual**, which is
+the only source that covers L5. Full DP set as first observed
 (idle, after re-pair): `2=true, 3="L1", 4="3h", 5=239, 101=99, 102="zzcd", 103="kai",
 104="kk", 105=30, 106=60`.
 
 | DP | Type | Observed values | Function | How established |
 |---|---|---|---|---|
 | 2 | bool | `true`, `false` | **Power.** Writing `true` starts the device — it begins a mist burst within ~2 s; writing `false` stops it. ⚠️ Two side effects, both observed: powering **on** arms a countdown by itself (DP 5 → 240 while DP 4 still reads `untime`), and powering **off** resets intensity to L1 and the countdown to `3h`. The phone app's own off preserves both, so the app sends more than a DP 2 write | write test 2026-08-21 ✅ both directions |
-| 3 | enum string | `L1`…`L6` | **Intensity level.** Writing it is accepted and DP 106 mirrors it: L1→60, L2→180, L3→300, L4→600, L6→2400 (L5 unobserved, presumably 1200) | walk + write test ✅ |
-| 4 | enum string | `untime`, `1h`, `3h`, `8h` | **Countdown setting.** Writing it is accepted and DP 5 mirrors the remaining minutes: `1h`→60, `3h`→240, `8h`→480, `untime`→0. ⚠️ `3h`↔240 min is what the device does, mislabel or not; `2h` never observed | walk + write test ✅ |
+| 3 | enum string | `L1`…`L6` | **Intensity level.** Writing it is accepted and DP 106 mirrors it as pause seconds. **Confirmed against the printed manual**: 30 s emission then a pause of 1/3/5/10/20/40 min → L1=60, L2=180, L3=300, L4=600, L5=1200, L6=2400. Five observed on the device; L5 comes from the manual and matches the interpolation exactly. ⚠️ The number counts *pause*, so L1 is the **strongest** setting and L6 the weakest | walk + write test + manual ✅ |
+| 4 | enum string | `untime`, `1h`, `3h`, `8h` | **Countdown setting**, and there are exactly **four** of them. DP 5 follows: `1h`→60, `3h`→240, `8h`→480, `untime`→0. ⚠️ **`3h` is the manual's 4-hour setting** — the firmware string is simply wrong, and the entity labels it by duration. The walk cycled the app's entire timer list and produced only these four values, matching the manual (1h / 4h / 8h / continuous); `2h` and `4h` were never offered by the device and have been removed from the integration | walk + write test + manual ✅ |
 | 5 | int | 0–480, ticks down | **Countdown remaining, minutes.** Watched decrement 240→239 during the walk. Not a pure mirror of DP 4: a power-on sets it to 240 while DP 4 still reads `untime`, so DP 4 is the request and DP 5 is what the device actually armed | walk ✅ + power-on test ✅ |
 | 7 | bool | `false` | ❓ unknown, and **new**: absent from every dump taken during the control walk, present 2026-08-21 late while the device sat powered off. A DP that appears partway through recon is worth watching — it may only be reported in certain states | live read 2026-08-21 ❓ |
 | 101 | int | 91–100 | **Battery %, almost certainly.** Went 99→100 while plugged in, then fell ~1%/minute while running — including straight through pause phases, which is discharge rather than mist consumption, and is the observation that rules out oil level | walk + duty-cycle measurement 🔵 (strong inference) |
 | 102 | string | `zzcd`, `wcd`, `cdwc` | ❓ unknown. Moved only between walk phases, never in step with a single control. Looks like pinyin fragments; possibly a mode or program-state string | walk ❓ |
 | 103 | string | `kai` (开/open), `guan` (关/closed) | **Nozzle state — status, not command.** The device cycles it itself: `kai` for DP 105 seconds, then `guan` for DP 106 seconds, indefinitely. It tracks app power toggles because power *causes* misting, which is what made it look like the power DP. Do not write it: `guan` merely interrupts the current burst, `kai` is reverted by the duty-cycle controller | duty-cycle measurement 2026-08-21 ✅ |
 | 104 | string | `kk` | ❓ unknown. Never moved | walk ❓ |
-| 105 | int | 30 | **Work (burst) seconds, apparently fixed at 30.** Never moved; no app control touched it | walk 🔵 |
+| 105 | int | 30 | **Work (burst) seconds, fixed at 30 by design.** The manual specifies a 30 s emission at every one of the six levels, so this is a firmware constant rather than a sampling artefact. Never moved; no app control touches it | walk + manual ✅ |
 | 106 | int | 60–2400 | **Pause seconds — read-only mirror of DP 3.** Follows every DP 3 write *while the device is running*; written while powered off, DP 3 changes and 106 keeps its old value until the next power-on. Direct writes untested | walk + write test ✅ |
 
 Fill `How established` honestly. `"toggled power in app, DP 1 flipped"` is evidence.
@@ -193,8 +195,8 @@ half-answers being treated as answers.
   countdown sensor reads non-zero after every switch-on.
 - DP 102's values (`zzcd`/`wcd`/`cdwc`); DP 104 (`kk`); DP 7, which the device only started
   reporting after the control walk and so was never exercised by it.
-- The intensity enum's full extent: L5 unobserved; whether L1…L6 is the whole range.
-- The timer enum's full extent: `2h` never observed; why `3h` maps to 240 minutes.
+- ~~The intensity enum's full extent.~~ ✅ Closed by the manual (the project owner, 2026-08-21): L1–L6 is the whole range, pauses 1/3/5/10/20/40 min against a fixed 30 s emission. L5 remains the one level never seen on the wire, but it is now sourced rather than inferred.
+- ~~The timer enum's full extent; why `3h` maps to 240 minutes.~~ ✅ Closed by the manual (the project owner, 2026-08-21): the device offers 1h / 4h / 8h / continuous — four settings, exactly the four DP values the walk produced. `"3h"` **is** the 4-hour setting, mislabelled in firmware. `2h` and `4h` never existed.
 - Whether the schedule the app created lives anywhere readable — it moved **no** DP during the
   walk, which points at a cloud-side or app-side schedule, not an on-device one. If so,
   scheduling in Home Assistant is automations + the countdown DP, full stop (the sibling project's ADR-009
@@ -212,5 +214,6 @@ half-answers being treated as answers.
 | Date | What |
 |---|---|
 | 2026-08-10 | Created. Standard `xxj` set recorded as the hypothesis; nothing observed yet. |
+| 2026-08-21 (late) | Manual consulted. Intensity table confirmed including the never-observed L5 (20 min); the countdown's four settings confirmed and `"3h"` identified as the mislabelled 4-hour option. Two phantom timer options (`2h`, `4h`) removed from the integration. |
 | 2026-08-21 (evening) | **Correction.** DP 103 reclassified from power *command* to nozzle *status*: measured untouched, it cycles itself (30 s open / pause-interval closed). Power is DP 2, write-verified both directions. The integration's switch was rewritten onto DP 2 and 103 became a read-only `binary_sensor`. |
 | 2026-08-21 | First contact: `tinytuya scan`, then QR login for the `local_key`; category `xxj` confirmed; **registered cloud schema found EMPTY** (the real "no entities" cause). Re-pair put the device on the LAN (v3.5). Control walk + write tests: DP table filled — intensity (3, mirrored by 106), timer (4, mirrored by 5), power state (103), battery (101), fixed work time (105). The hypothesis was wrong in detail — the standard `xxj` codes appear nowhere; every meaningful DP is vendor-specific — and right in spirit. ON command unresolved. |

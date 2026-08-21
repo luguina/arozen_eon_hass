@@ -52,8 +52,9 @@ MISTING_OFF: Final = "guan"
 #: Intensity level, L1-L6. Writing it is accepted and DP 106 mirrors the pause seconds ✅.
 DP_INTENSITY: Final[int | None] = 3
 
-#: Burst length in seconds. Fixed at 30 - never moved during the walk, no app control
-#: touches it, and the measured burst matched it to the second. Read-only in practice.
+#: Burst length in seconds. Fixed at 30 by design, not by coincidence: the manual specifies
+#: a 30 s emission at every one of the six levels. Never moved during the walk, no app
+#: control touches it, and the measured burst matched it to the second. Read-only.
 DP_WORK_S: Final[int | None] = 105
 
 #: Pause seconds - read-only mirror of DP_INTENSITY. Follows every intensity write ✅,
@@ -64,8 +65,22 @@ DP_PAUSE_S: Final[int | None] = 106
 #: Countdown setting. Writing it is accepted and DP 5 follows ✅.
 #: Note "3h" arms 240 minutes on this firmware - the label is what it is.
 DP_COUNTDOWN: Final[int | None] = 4
-COUNTDOWN_OPTIONS: Final = ("untime", "1h", "2h", "3h", "4h", "8h")
+#: The device has exactly **four** countdown settings, not six. Confirmed twice over: the
+#: manual lists 1h / 4h / 8h / continuous, and the control walk cycled the app's whole timer
+#: list while producing only these four DP values. An earlier revision also offered "2h" and
+#: "4h" - invented to round out the enum, never acknowledged by the device, and removed.
+#:
+#: ⚠️ **"3h" is the manual's 4-hour setting.** It arms 240 minutes, observed repeatedly. The
+#: firmware's own string is simply wrong; COUNTDOWN_MINUTES is the truth and the entity layer
+#: labels it by duration so nobody has to know that.
 COUNTDOWN_MINUTES: Final = {"untime": 0, "1h": 60, "3h": 240, "8h": 480}
+COUNTDOWN_OPTIONS: Final = tuple(COUNTDOWN_MINUTES)
+COUNTDOWN_LABELS: Final = {
+    "untime": "Continuous",
+    "1h": "1 hour",
+    "3h": "4 hours",  # yes, really - see above
+    "8h": "8 hours",
+}
 
 #: Countdown remaining, minutes. Ticks down; read-only ✅.
 #: Not a pure mirror of DP_COUNTDOWN: a power-on sets this to 240 while DP 4 still reads
@@ -76,11 +91,24 @@ DP_COUNTDOWN_REMAINING: Final[int | None] = 5
 #: including through pause phases, which is discharge rather than consumption ✅.
 DP_BATTERY: Final[int | None] = 101
 
-#: Intensity level -> pause seconds, as mirrored by the device (L5 unobserved, interpolated
-#: from the geometric-ish progression 60/180/300/600/?/2400: the walk showed the app offers
-#: six levels and the pause doubles-ish per step; L5=1200 is an inference, marked as such).
+#: Intensity level -> pause seconds. **Confirmed against the printed manual** (the project owner,
+#: 2026-08-21), which specifies a 30 s emission followed by a pause of 1/3/5/10/20/40
+#: minutes for L1-L6. Five of the six were also observed on the device via DP 106; L5 was
+#: never reached during the walk and had been interpolated at 1200 - the manual puts it at
+#: exactly 20 minutes, so the inference was right and is now sourced.
+#:
+#: Note the direction: the level number counts *pause*, so **L1 is the strongest setting
+#: and L6 the weakest**. The entity layer is responsible for not making a user guess that.
 INTENSITY_PAUSE_S: Final = {"L1": 60, "L2": 180, "L3": 300, "L4": 600, "L5": 1200, "L6": 2400}
 INTENSITY_LEVELS: Final = tuple(INTENSITY_PAUSE_S)
+
+#: Human labels for the levels, derived from the pause table rather than written out, so a
+#: label can never drift from the interval it claims. "L1 · every 1 min" keeps the app's own
+#: level name - the two surfaces stay in sync - while making the direction self-evident,
+#: which a bare "L1…L6" does not: the number counts pause, so it runs strongest to weakest.
+INTENSITY_LABELS: Final = {
+    level: f"{level} · every {pause // 60} min" for level, pause in INTENSITY_PAUSE_S.items()
+}
 
 
 def unmapped_functions() -> list[str]:
