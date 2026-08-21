@@ -10,13 +10,31 @@ burst) and silently failed in the on direction (the firmware reasserts the real 
 See dp.py for the measurement and docs/datapoints.md §Datapoints for the evidence. The
 valve now has its own read-only entity in binary_sensor.py.
 
-⚠️ Two firmware behaviours ride along with a power write, and the integration does not
-hide them, because pretending they are not there would make the entity lie:
+⚠️ Turning the device **on** puts the firmware back to its power-on defaults, and the
+integration does not hide that, because pretending otherwise would make the entity lie:
 
-* turning **on** arms the device's default auto-off — DP 5 goes to 240 minutes by itself.
-* turning **off** resets intensity to L1 and the countdown to "3h". The phone app's own
-  off preserves both, so the app sends something more than a DP 2 write; what, is not yet
-  known (docs/datapoints.md "Still unknown").
+* intensity is cleared to L1.
+* the countdown is reset — DP 4 to "3h", DP 5 to 240 minutes — overwriting a deliberate
+  setting, not just filling an empty one.
+
+Both land in the same status record as the power change. Turning **off** moves DP 2 and
+nothing else.
+
+This was measured on the physical remote with the phone app closed, and then on the app
+itself (docs/captures/remote-walk-2026-08-21.jsonl): three power-ons from two sources, all
+identical. That is what makes it firmware behaviour rather than ours — it happens whoever
+turns the device on.
+
+An earlier revision of this docstring blamed the **off** edge and said the phone app
+"preserves" intensity. Both were wrong. The off is innocent, and the app resets intensity
+exactly like we do — it simply redraws its own screen from local state afterwards, which is
+what looked like preservation. The reset was pinned on the off because the off is what you
+do just before you notice, which is the same mistake that once made DP 103 look like the
+power switch: the action that precedes an observation is not necessarily its cause.
+
+Restoring intensity across a power cycle is therefore a coordinator job on the *on* edge,
+and a capability the phone app does not have. Tracked as issue #14, deliberately not done
+here.
 """
 
 from __future__ import annotations

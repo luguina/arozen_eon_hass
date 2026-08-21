@@ -25,13 +25,20 @@ from typing import Any, Final
 #: Power, a bool. Write-verified both ways 2026-08-21: ``True`` starts the device (it
 #: begins a mist burst within ~2 s), ``False`` stops it. This is the command DP.
 #:
-#: Two firmware behaviours ride along with a power write, both observed, neither optional:
+#: Powering **on** restores the firmware's defaults, in the same status record as the power
+#: change, and it happens whoever turns the device on - us, the phone app, or the remote:
 #:
-#: * powering **on** arms a countdown by itself — DP 5 jumped 0 → 240 within 2 s of the
-#:   write, while DP 4 still read "untime". The device has a default auto-off.
-#: * powering **off** resets intensity to L1 and the countdown to "3h". Settings do not
-#:   survive a power cycle driven through this DP, though the phone app's own off does
-#:   preserve them — so the app is doing something more than writing DP 2.
+#: * intensity is cleared to L1.
+#: * the countdown is reset - DP 4 to "3h", DP 5 to 240 minutes. An "8h" setting became
+#:   "3h" on the next power-on, so this overwrites a choice rather than filling a blank.
+#:
+#: Powering **off** moves this DP and nothing else.
+#:
+#: An earlier revision of this comment said the opposite: that the *off* reset the settings,
+#: and that the phone app avoided it by sending something more than a DP 2 write. Both
+#: halves were wrong. The remote walk of 2026-08-21 measured both edges with the app closed,
+#: then measured the app itself - three power-ons, two sources, all identical, and nobody
+#: re-applied anything. Restoring intensity is issue #14.
 DP_POWER: Final[int | None] = 2
 
 #: Whether the nozzle is misting *right now*: "kai" (开, open) / "guan" (关, closed).

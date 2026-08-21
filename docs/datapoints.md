@@ -90,26 +90,27 @@ just not one to plan around.
 
 ### Datapoints
 
-Evidence: [captures/dp-watch-2026-08-21.txt](captures/dp-watch-2026-08-21.txt) (control walk),
-local write tests with `tools/dp_set.py` the same evening, a duty-cycle measurement taken with
-nothing writing to the device, and — for the intensity table — **the printed manual**, which is
-the only source that covers L5. Full DP set as first observed
+Evidence: [captures/dp-watch-2026-08-21.txt](captures/dp-watch-2026-08-21.txt) (control walk
+via the app), [captures/remote-walk-2026-08-21.jsonl](captures/remote-walk-2026-08-21.jsonl)
+(**physical remote, app closed**, plus the charger and LED tests that followed), local write
+tests with `tools/dp_set.py`, a duty-cycle measurement taken with nothing writing to the
+device, and **the printed manual**. Full DP set as first observed
 (idle, after re-pair): `2=true, 3="L1", 4="3h", 5=239, 101=99, 102="zzcd", 103="kai",
 104="kk", 105=30, 106=60`.
 
 | DP | Type | Observed values | Function | How established |
 |---|---|---|---|---|
-| 2 | bool | `true`, `false` | **Power.** Writing `true` starts the device — it begins a mist burst within ~2 s; writing `false` stops it. ⚠️ Two side effects, both observed: powering **on** arms a countdown by itself (DP 5 → 240 while DP 4 still reads `untime`), and powering **off** resets intensity to L1 and the countdown to `3h`. The phone app's own off preserves both, so the app sends more than a DP 2 write | write test 2026-08-21 ✅ both directions |
-| 3 | enum string | `L1`…`L6` | **Intensity level.** Writing it is accepted and DP 106 mirrors it as pause seconds. **Confirmed against the printed manual**: 30 s emission then a pause of 1/3/5/10/20/40 min → L1=60, L2=180, L3=300, L4=600, L5=1200, L6=2400. Five observed on the device; L5 comes from the manual and matches the interpolation exactly. ⚠️ The number counts *pause*, so L1 is the **strongest** setting and L6 the weakest | walk + write test + manual ✅ |
-| 4 | enum string | `untime`, `1h`, `3h`, `8h` | **Countdown setting**, and there are exactly **four** of them. DP 5 follows: `1h`→60, `3h`→240, `8h`→480, `untime`→0. ⚠️ **`3h` is the manual's 4-hour setting** — the firmware string is simply wrong, and the entity labels it by duration. The walk cycled the app's entire timer list and produced only these four values, matching the manual (1h / 4h / 8h / continuous); `2h` and `4h` were never offered by the device and have been removed from the integration | walk + write test + manual ✅ |
+| 2 | bool | `true`, `false` | **Power — and the *only* on/off this device has.** The phone app's separate "diffuser" button writes this same DP: pressing it produced `{"2": [true,false]}` and then `{"2": [false,true]}`, nothing else. So there is no analogue of the standard `xxj` set's `switch_spray`; power and spray are one control. Writing `true` starts the device — it begins a mist burst within ~2 s; writing `false` stops it. ⚠️ **Both side effects belong to the *on* edge.** Powering on resets intensity to L1 **and** resets the countdown (DP 4 → `3h`, DP 5 → 240), in a single status record — one firmware default state, reapplied every time. Powering off moves DP 2 and nothing else. ⚠️ **Corrected 2026-08-21 (night).** This row previously blamed the off edge and claimed the phone app preserved intensity. Both were wrong: three power-ons — remote, remote, app — behaved identically, and the app does **not** restore intensity afterwards (30 s of silence, DP 3 flat at L1). The app's screen redraws from its own state, which is what "preserving" was | write test ✅ both directions; **three power-ons, two sources, app closed for two of them** ✅ |
+| 3 | enum string | `L1`…`L6` | **Intensity level.** Writing it is accepted and DP 106 mirrors it as pause seconds. L1=60, L2=180, L3=300, L4=600, L5=1200, L6=2400. ✅ **All six measured on the wire** — the remote walk stepped L1→L6 in order and DP 106 matched the manual's table at every level, including L5, which no app walk had ever produced. The manual is now corroboration, not the only source. ⚠️ The number counts *pause*, so L1 is the **strongest** setting and L6 the weakest. ⚠️ Changing intensity restarts the duty cycle — DP 103 goes to `kai` in the same record. ⚠️ **Cleared to L1 by every power-on**, by any source; see DP 2 and [#14](https://github.com/luguina/arozen_ha_controller/issues/14) | walk + write test + manual + **remote walk, all six levels** ✅ |
+| 4 | enum string | `untime`, `1h`, `3h`, `8h` | **Countdown setting**, and there are exactly **four** of them. DP 5 follows: `1h`→60, `3h`→240, `8h`→480, `untime`→0. ⚠️ **`3h` is the 4-hour setting — the firmware string is simply wrong**, and the entity labels it by duration. ✅ **Proven on the remote rather than inferred:** the button physically labelled **4h** produced `4: "3h"` with `5: 240`. A printed button, a firmware string and a remaining count that disagree three ways — with the button and the count agreeing against the string. ⚠️ **Reset to `3h` by every power-on**, overwriting a deliberate choice: an `8h` setting became `3h` on the next on. `2h` and `4h` were never offered by the device and have been removed from the integration | walk + write test + manual + **remote button** ✅ |
 | 5 | int | 0–480, ticks down | **Countdown remaining, minutes.** Watched decrement 240→239 during the walk. Not a pure mirror of DP 4: a power-on sets it to 240 while DP 4 still reads `untime`, so DP 4 is the request and DP 5 is what the device actually armed | walk ✅ + power-on test ✅ |
-| 7 | bool | `false` | ❓ unknown, and **new**: absent from every dump taken during the control walk, present 2026-08-21 late while the device sat powered off. A DP that appears partway through recon is worth watching — it may only be reported in certain states | live read 2026-08-21 ❓ |
-| 101 | int | 91–100 | **Battery %, almost certainly.** Went 99→100 while plugged in, then fell ~1%/minute while running — including straight through pause phases, which is discharge rather than mist consumption, and is the observation that rules out oil level | walk + duty-cycle measurement 🔵 (strong inference) |
-| 102 | string | `zzcd`, `wcd`, `cdwc` | ❓ unknown. Moved only between walk phases, never in step with a single control. Looks like pinyin fragments; possibly a mode or program-state string | walk ❓ |
+| 7 | bool | `true`, `false` | **Frontal LED.** ✅ Identified 2026-08-21 (night): toggling the LED in the app moved it within one poll, both directions, twice. ⚠️ **It also moves on its own, and not predictably.** Two power cycles took it down with DP 2 and back up again — but a third, after the charger was unplugged, moved DP 2 alone and left DP 7 untouched. Both self-moving episodes happened while the device was **on the charger**, which had itself produced four transitions in 40 s on plug-in. So the device does move this DP underneath a controller, but the condition is *not* established: "follows power" fits two observations out of three and is recorded here as the unfinished thing it is. Absent from every dump during the app control walk, and `false` throughout the remote walk, which in hindsight simply means the LED was off | app toggle test 2026-08-21 ✅ both directions |
+| 101 | int | 80–100 | **Battery %.** ✅ Closed 2026-08-21 (night) — the app's own battery readout agreed with the DP to within a point (app 83%, DP 83), which is the cross-check this row previously lacked. On battery it falls **exactly 1 per 61 s while running** (seven consecutive ticks) and **stops dead when DP 2 goes false**, flat for 12 minutes; on the charger it rises. Discharge tracks *runtime*, not misting — through the pause phases, when no mist is produced — which is what rules out oil level. ⚠️ Whether the gauge is measured or a linear runtime estimate is not established: no intensity level was held long enough for the duty cycle to separate them, so treat it as approximate | remote walk on battery + charger test + app cross-check ✅ |
+| 102 | string | `zzcd`, `wcd`, `cdwc` | **Charging status.** ✅ Identified 2026-08-21 (night): plugging in the charger moved it `wcd`→`zzcd`, and the app's own charging indicator agrees. The values are pinyin initials, the same house style as DP 103's `kai`/`guan`: `zzcd` = 正在充电 *zhèngzài chōngdiàn*, **charging**; `wcd` = 未充电 *wèi chōngdiàn*, **not charging**; `cdwc` = 充电完成 *chōngdiàn wánchéng*, **charge complete**. This also explains the movement that made it look like noise — it changed `cdwc`→`wcd` *between* sessions with the device idle and nothing writing to it, because the battery finished charging and then came off the cable. **No button walk of any length could have found it**; it needs a cable, which is why an entire remote walk never touched it | charger test 2026-08-21 ✅ |
 | 103 | string | `kai` (开/open), `guan` (关/closed) | **Nozzle state — status, not command.** The device cycles it itself: `kai` for DP 105 seconds, then `guan` for DP 106 seconds, indefinitely. ⚠️ **Frozen while powered off**: switch off mid-burst and it reports `kai` indefinitely (measured still `kai` minutes later with DP 2 false), so it is a live reading only while running. It tracks app power toggles because power *causes* misting, which is what made it look like the power DP. Do not write it: `guan` merely interrupts the current burst, `kai` is reverted by the duty-cycle controller | duty-cycle measurement 2026-08-21 ✅ |
-| 104 | string | `kk` | ❓ unknown. Never moved | walk ❓ |
+| 104 | string | `kk` | ❓ unknown, and the **last** one. Never moved — through an entire app control walk, an entire remote walk (power both ways, all six intensity levels, all four timer settings, the AROMA button), an LED toggle, a charger plug and unplug, a schedule created and deleted, and the app's own "diffuser" button. Every control the phone app exposes is now mapped to a different DP, so there is no untried stimulus left. Leading explanation is a firmware constant like DP 105 rather than a control; recorded as unknown because that is an explanation, not a measurement | walk + remote walk + LED + charger ❓ |
 | 105 | int | 30 | **Work (burst) seconds, fixed at 30 by design.** The manual specifies a 30 s emission at every one of the six levels, so this is a firmware constant rather than a sampling artefact. Never moved; no app control touches it | walk + manual ✅ |
-| 106 | int | 60–2400 | **Pause seconds — read-only mirror of DP 3.** Follows every DP 3 write *while the device is running*; written while powered off, DP 3 changes and 106 keeps its old value until the next power-on. Direct writes untested | walk + write test ✅ |
+| 106 | int | 60–2400 | **Pause seconds — read-only mirror of DP 3.** Follows every DP 3 change *while the device is running*; changed while powered off, DP 3 moves and 106 keeps its old value until the next power-on. ✅ Mirrored correctly at **all six levels** during the remote walk, matching `dp.py`'s table exactly. Direct writes untested | walk + write test + remote walk ✅ |
 
 Fill `How established` honestly. `"toggled power in app, DP 1 flipped"` is evidence.
 `"probably intensity"` is not, and should say so.
@@ -193,10 +194,22 @@ half-answers being treated as answers.
   a control is not necessarily the control.** Deciding whether a DP is a command or a status
   needs a measurement with *nothing writing to it*, which is what finally settled it: left
   untouched, 103 cycled on its own.
-- **What the app's power-off does that a DP 2 write does not.** Writing `false` resets intensity
-  to L1 and the countdown to `3h`; the app's own off preserves both. So the app sends a
-  compound command, or a different DP entirely. Until this is known, the Home Assistant switch
-  resets the user's intensity on every off — documented in `switch.py`, not hidden.
+- ~~**What the app's power-off does that a DP 2 write does not.**~~ ✅ **Resolved 2026-08-21
+  (night): nothing, because the question was built on a false premise.** The remote walk caught
+  both edges with the app closed. Off moves DP 2 alone. **On** clears intensity to L1 and resets
+  the countdown, in one record — `{"2":[false,true],"3":["L3","L1"],"4":["untime","3h"]}` — after
+  the device had held `L3` through the entire off period. Then the app was tested directly: its
+  own on reset `L4`→`L1` and **did not restore it**, thirty seconds of silence afterwards. So the
+  app never preserved intensity; its screen redraws from local state, which is what everyone was
+  reading. Three power-ons from two sources, all identical.
+
+  Two lessons, both already paid for once in this project. **The action that precedes an
+  observation is not necessarily its cause** — the off collected the blame because it is what you
+  do just before you notice, exactly as DP 103 collected the blame for power because it moves
+  when power moves. And **check the premise before explaining it**: two hypotheses were framed,
+  and the measurement that settled them was the one that asked whether there was anything to
+  explain. Restoring intensity across a power cycle is now [#14](https://github.com/luguina/arozen_ha_controller/issues/14),
+  and it is a capability the phone app does not have rather than parity with it.
 - **Why power-on arms a 240-minute countdown.** DP 5 → 240 within 2 s of `2=true`, with DP 4
   still reading `untime`. Presumably a firmware default auto-off. Harmless, but it means the
   countdown sensor reads non-zero after every switch-on.
@@ -204,26 +217,42 @@ half-answers being treated as answers.
   DP 103 (nozzle) and DP 106 (pause mirror, which will not follow a DP 3 write while off).
   Assume any status DP on this device is stale until proven live — the integration gates
   the misting sensor on power for exactly this reason.
-- DP 102's values (`zzcd`/`wcd`/`cdwc`); DP 104 (`kk`); DP 7, which the device only started
-  reporting after the control walk and so was never exercised by it.
-- ~~The intensity enum's full extent.~~ ✅ Closed by the manual (the project owner, 2026-08-21): L1–L6 is the whole range, pauses 1/3/5/10/20/40 min against a fixed 30 s emission. L5 remains the one level never seen on the wire, but it is now sourced rather than inferred.
+- ~~DP 102's values (`zzcd`/`wcd`/`cdwc`); DP 7~~ ✅ **Both identified 2026-08-21 (night).**
+  DP 7 is the **frontal LED** (app toggle, both directions, within one poll). DP 102 is
+  **charging status**, in pinyin initials — 正在充电 / 未充电 / 充电完成 — confirmed by plugging
+  the charger in. Neither was findable by pressing buttons: the LED had simply been off all
+  night, and 102 needs a *cable*, not a control, which is why an entire remote walk never
+  moved it. Worth remembering the next time a DP "never moves" — it may mean the stimulus is
+  not a button.
+- **DP 104 (`kk`)** — the last one, and now the only DP with no function. It survived an app
+  control walk, a remote walk, an LED toggle and a charger event without moving, and every
+  control the app exposes is mapped to a different DP. A firmware constant like DP 105 is the
+  leading explanation, but that is an explanation, not a measurement, so it stays here.
+- ~~The intensity enum's full extent.~~ ✅ Closed by the manual (the project owner, 2026-08-21), then **measured in full** on the remote walk that night: L1–L6, pauses 1/3/5/10/20/40 min against a fixed 30 s emission, with DP 106 matching at every level. L5 — the one level no app walk ever produced — is now observed rather than sourced.
 - ~~The timer enum's full extent; why `3h` maps to 240 minutes.~~ ✅ Closed by the manual (the project owner, 2026-08-21): the device offers 1h / 4h / 8h / continuous — four settings, exactly the four DP values the walk produced. `"3h"` **is** the 4-hour setting, mislabelled in firmware. `2h` and `4h` never existed.
-- Whether the schedule the app created lives anywhere readable — it moved **no** DP during the
-  walk, which points at a cloud-side or app-side schedule, not an on-device one. If so,
+- Whether the schedule the app created lives anywhere readable. It moved **no** DP during the
+  original control walk, and — tested again on 2026-08-21 (night) — creating *and then deleting*
+  a schedule moved no DP either. Two independent attempts, nothing on the wire. That is about as
+  close to settled as a negative gets: the schedule is cloud-side or app-side, not on-device, so
   scheduling in Home Assistant is automations + the countdown DP, full stop (the sibling project's ADR-009
-  outcome, arrived at by a much shorter road).
+  outcome, arrived at by a much shorter road). Left open rather than ticked because proving a DP
+  *absent* needs a channel we have not checked, not just a walk that did not see it.
 - Whether writing a DP while the app is connected is accepted, rejected, or silently reverted
   — the contention seen during the write tests (null answers, one 914) is consistent with the
   app holding the single local connection. ADR-004's measurement, partially already made.
-- Whether DP 101 is battery or oil level. Battery, near-certainly: it rose to 100 while plugged
-  in, and it falls at a steady ~1%/minute while running — *including through the pause phases,
-  when no mist is being produced*. Oil level would only fall while misting. Not closed outright
-  because nothing has confirmed it against the unit's own battery indicator.
+- ~~Whether DP 101 is battery or oil level.~~ ✅ **Battery**, 2026-08-21 (night). The caveat
+  this line used to carry — "nothing has confirmed it against the unit's own battery indicator"
+  — is now discharged: the phone app read **83%** while the DP read **83**. On battery it falls
+  exactly 1 per 61 s of runtime and stops dead when the device powers off; on the charger it
+  rises. What remains open is narrower and worth keeping: whether the gauge is measured or a
+  linear runtime estimate. No intensity level was held long enough for the duty cycle to
+  separate them, so the sensor is documented as approximate rather than trusted.
 
 ## Change log
 
 | Date | What |
 |---|---|
+| 2026-08-21 (night) | **Remote walk** ([capture](captures/remote-walk-2026-08-21.jsonl)), app closed, then charger and LED tests. **Correction: the intensity reset belongs to the power-*on* edge, not the off — and the phone app does not preserve intensity either.** The premise behind two competing hypotheses turned out to be false; the integration's `DP 2 = false` write was never responsible for anything. Identified **DP 7 = frontal LED** and **DP 102 = charging status** (pinyin initials), and closed **DP 101 = battery** against the app's own readout. Intensity L1–L6 measured in full, L5 seen on the wire for the first time; the `3h`/4-hour firmware mislabel proven by pressing the button. **DP 104 did not move once** — recorded as a result, not a gap. |
 | 2026-08-21 (late) | Header corrected. This file had opened with "NOTHING HERE HAS BEEN OBSERVED ON THE DEVICE" through the entire recon that observed all of it — a first line that contradicted its own contents. The *Device identity* table's protocol-version and local-IP rows were stale from the same period. |
 | 2026-08-10 | Created. Standard `xxj` set recorded as the hypothesis; nothing observed yet. |
 | 2026-08-21 (late) | Manual consulted. Intensity table confirmed including the never-observed L5 (20 min); the countdown's four settings confirmed and `"3h"` identified as the mislabelled 4-hour option. Two phantom timer options (`2h`, `4h`) removed from the integration. |

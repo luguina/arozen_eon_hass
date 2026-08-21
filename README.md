@@ -82,9 +82,11 @@ None of them is the integration inventing something; all four are the firmware.
 not the output — L1 mists every minute, L6 every forty. The entity labels say so
 (`L4 · every 10 min`) precisely so nobody has to remember it.
 
-**2. Turning it off resets intensity to L1 and the timer to 4 hours.** The device does this
-itself on power-off; it is not something the integration can decline to do. If your automation
-turns the diffuser off, it must set the intensity again *after* turning it back on:
+**2. Turning it *on* resets intensity to L1 and the timer to 4 hours.** The device does this
+itself on every power-**on**, whoever performs it — Home Assistant, the phone app, or the
+physical remote. It is not something the integration can decline to do, and the phone app does
+not escape it either. So if your automation power-cycles the diffuser, it must set the
+intensity again *after* turning it back on:
 
 ```yaml
 automation:
@@ -160,14 +162,15 @@ capture-specific rules are in [docs/captures/README.md](docs/captures/README.md#
 
 ## Status
 
-**Working, in daily use, with one open question and three unidentified datapoints.**
+**Working, in daily use, with one unidentified datapoint left.**
 
 | | |
 |---|---|
 | ✅ | Power, intensity, timer, battery, nozzle state — all mapped, write-verified against the device, and covered by tests |
 | ✅ | Config flow, options flow and all eight entities verified end to end against a real Home Assistant instance and the real diffuser |
-| ❓ | **What the phone app's power-off does that ours does not.** Ours resets intensity to L1; the app's appears not to. Until this is settled, gotcha #2 above stands. [#5](https://github.com/luguina/arozen_ha_controller/issues/5) is the experiment that decides it |
-| ❓ | **DP 102, DP 104 and DP 7** are unidentified. The `datapoints_recon` diagnostic sensor exists to watch them, and gets deleted once they are named |
+| ✅ | **What the phone app's power-off does that ours does not: nothing.** [#5](https://github.com/luguina/arozen_ha_controller/issues/5)'s remote walk settled it and overturned the premise — the reset belongs to the power-**on** edge, and the app loses intensity exactly like we do. Gotcha #2 above is the corrected version. Restoring it is [#14](https://github.com/luguina/arozen_ha_controller/issues/14), a capability the app does not have |
+| ✅ | **DP 7 is the frontal LED; DP 102 is charging status** (`zzcd`/`wcd`/`cdwc` — 正在充电 / 未充电 / 充电完成). Neither was reachable by pressing buttons: the LED had been off all session, and charging needs a cable |
+| ❓ | **DP 104** (`kk`) is the last unidentified datapoint. It has not moved through an app walk, a remote walk, an LED toggle or a charger event; a firmware constant is the leading explanation. The `datapoints_recon` diagnostic sensor watches it, and gets deleted once it is named |
 | ⏸️ | Whether the phone app has to keep working alongside Home Assistant ([ADR-004](docs/decisions.md#adr-004--pending--must-the-phone-app-keep-working)) |
 
 The honest version, with evidence and everything still unknown, is
