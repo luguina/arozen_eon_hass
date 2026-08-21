@@ -1,0 +1,104 @@
+name: CI
+
+# The correctness gate: ruff and the test suite, on the one interpreter this project's pins
+# actually resolve against. Runs on every pull request, because the alternative — running it
+# by hand on one laptop — is how a suite stays green while the code underneath it is wrong.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A newer push to a branch makes the older run's verdict worthless. Cancel it rather than
+# paying for an answer about a commit nobody is going to merge.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ruff + pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # Pinned to 3.14 exactly, not to a range, and this is load-bearing.
+      # requirements_test.txt pins homeassistant==2026.8.1, which only resolves on 3.14:
+      # on 3.12 pip silently backtracks to 2025.1.4 and on 3.13 to 2026.2.3. Both install
+      # cleanly, both pass, and both test a core nobody runs.
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements_test.txt
+
+      # `python -m pip` throughout rather than a bare `pip`: it is guaranteed to be the
+      # pip belonging to the interpreter setup-python just selected, and this workflow's
+      # whole premise is that the interpreter is the thing that must not drift.
+      - name: Install pinned test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements_test.txt
+
+      # The step this workflow exists for.
+      #
+      # Every step above can succeed while producing an environment that tests the wrong
+      # thing, and the failure mode of that is a *pass* — the one result nobody
+      # investigates. So the environment is asserted against requirements_test.txt before
+      # the suite is allowed to say anything about the code. Derived from the file rather
+      # than restated here, so a re-pin cannot leave this check asserting the old version.
+      - name: Assert the suite is about to test what it claims to
+        run: |
+          python - <<'PY'
+          import re
+          import sys
+          from importlib.metadata import PackageNotFoundError, version
+          from pathlib import Path
+
+          problems = []
+
+          if sys.version_info[:2] != (3, 14):
+              problems.append(f"interpreter is {sys.version.split()[0]}, expected 3.14")
+
+          pinned = dict(
+              re.findall(
+                  r"^([A-Za-z0-9_.-]+)==(\S+)",
+                  Path("requirements_test.txt").read_text(),
+                  re.M,
+              )
+          )
+          if not pinned:
+              problems.append("no `name==version` pins found in requirements_test.txt")
+
+          for name, want in sorted(pinned.items()):
+              # Not raising here matters: a missing package is a real failure mode (a
+              # typo'd name, a half-finished install) and it must be reported as one line
+              # in the list below, not as a traceback that buries every other problem
+              # already collected — including the interpreter check.
+              try:
+                  got = version(name)
+              except PackageNotFoundError:
+                  problems.append(f"{name} is not installed; requirements_test.txt pins {want}")
+                  continue
+              if got != want:
+                  problems.append(f"{name} is {got}, requirements_test.txt pins {want}")
+
+          if problems:
+              print("::error::the test environment does not match requirements_test.txt")
+              for problem in problems:
+                  print(f"  - {problem}")
+              sys.exit(1)
+
+          installed = ", ".join(f"{name}=={want}" for name, want in sorted(pinned.items()))
+          print(f"python {sys.version.split()[0]}; {installed}")
+          PY
+
+      - name: ruff
+        run: ruff check .
+
+      - name: pytest
+        run: pytest

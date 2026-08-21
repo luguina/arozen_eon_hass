@@ -1,0 +1,48 @@
+name: Validate
+
+# The packaging gate. This does not look at the integration's behaviour — it checks that
+# Home Assistant can *load* it at all, which is a failure that otherwise surfaces at
+# startup in a house rather than at review time here.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # hassfest validates against rules that move without this repository changing: a core
+  # release can tighten the manifest schema months after the last commit. The scheduled run
+  # turns that into a Monday notification instead of a mystery failure on the next PR.
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hassfest:
+    name: hassfest (manifest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      # @master is the documented usage and what every Home Assistant repository runs. The
+      # one tag on that repository (1.0.0) predates the action's current shape.
+      - uses: home-assistant/actions/hassfest@master
+
+# There is no `hacs/action` job here, and that is a considered removal rather than an
+# omission. It was in this file first and could not do the job:
+#
+#   Its metadata checks go through the authenticated GitHub API, but every *file content*
+#   check downloads from https://raw.githubusercontent.com/{repo}/{ref}/{path} with no
+#   credentials. This repository is private, so those URLs 404, the download returns None,
+#   and the validator reports the file as invalid. The first run failed on exactly
+#   `hacsjson` and `integration_manifest` — the two content-based checks — while every
+#   tree- and metadata-based check passed.
+#
+# Ignoring those two would have left five of seven checks suppressed: a job that validates
+# almost nothing while looking like it validates something. So the checks moved to
+# tests/test_packaging.py, which applies HACS's own schemas to the working tree — the real
+# rules, on the actual files, with no network and no dependence on the repository being
+# public. That file documents the trade.
+#
+# If this repository is ever made public, restoring the job is worth it: it would then also
+# cover `brands` and `license`, which a local test cannot.
