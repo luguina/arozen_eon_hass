@@ -10,14 +10,20 @@ burst) and silently failed in the on direction (the firmware reasserts the real 
 See dp.py for the measurement and docs/datapoints.md §Datapoints for the evidence. The
 valve now has its own read-only entity in binary_sensor.py.
 
-⚠️ Turning the device **on** puts the firmware back to its power-on defaults, and the
-integration does not hide that, because pretending otherwise would make the entity lie:
+⚠️ Turning the device **on** puts the firmware back to its power-on defaults, both in the
+same status record as the power change:
 
-* intensity is cleared to L1.
+* intensity is cleared to L1 — and **the coordinator writes it back** (#14). See
+  IntensityMemory: the level the device held before is restored inside the same exchange when
+  this switch causes the power-on, so `switch.turn_on` returns with it already right, and on
+  the next poll when the remote or the phone app causes it.
 * the countdown is reset — DP 4 to "3h", DP 5 to 240 minutes — overwriting a deliberate
-  setting, not just filling an empty one.
+  setting, not just filling an empty one. This one is **left alone**, and the asymmetry is a
+  decision rather than an unfinished half: ADR-006 has it. Losing the intensity you chose is
+  a defect; an auto-off falling back to four hours is a safety default, and overriding a
+  safety default is not obviously right.
 
-Both land in the same status record as the power change. Turning **off** never touches
+Turning **off** never touches
 intensity or the countdown -- unanimous across all six captured off-edges -- though two of
 those six also took DP 7 (the LED) down with DP 2. The established claim is about the
 settings this entity would otherwise be blamed for losing, not about DP 2 moving alone.
@@ -25,7 +31,8 @@ settings this entity would otherwise be blamed for losing, not about DP 2 moving
 This was measured on the physical remote with the phone app closed, and then on the app
 itself (docs/captures/remote-walk-2026-08-21.jsonl): three power-ons from two sources, all
 identical. That is what makes it firmware behaviour rather than ours — it happens whoever
-turns the device on.
+turns the device on, which is also why the restore is not conditional on this entity having
+been the cause.
 
 An earlier revision of this docstring blamed the **off** edge and said the phone app
 "preserves" intensity. Both were wrong. The off is innocent, and the app resets intensity
@@ -34,9 +41,10 @@ what looked like preservation. The reset was pinned on the off because the off i
 do just before you notice, which is the same mistake that once made DP 103 look like the
 power switch: the action that precedes an observation is not necessarily its cause.
 
-Restoring intensity across a power cycle is therefore a coordinator job on the *on* edge,
-and a capability the phone app does not have. Tracked as issue #14, deliberately not done
-here.
+Restoring intensity across a power cycle is therefore a capability neither the device nor
+the vendor app has, and the restore never fakes it: if the write fails, the intensity select
+goes on reporting L1, because L1 is what the device is running at. The "Intensity restores"
+diagnostic sensor counts both outcomes and carries the error.
 """
 
 from __future__ import annotations

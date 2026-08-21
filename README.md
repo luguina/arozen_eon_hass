@@ -16,7 +16,7 @@ creates nothing. The datapoints are there; they just had to be found by hand.
 
 ## What you get
 
-Eight entities, on one device:
+Nine entities, on one device:
 
 | Entity | What it is |
 |---|---|
@@ -27,6 +27,7 @@ Eight entities, on one device:
 | `sensor.arozen_eon_pro_2_battery` | **Battery %** |
 | `sensor.arozen_eon_pro_2_timer_remaining` | **Minutes left** on the auto-off countdown |
 | `sensor.arozen_eon_pro_2_failed_polls` | Diagnostic: polls that failed, with the last error |
+| `sensor.arozen_eon_pro_2_intensity_restores` | Diagnostic: times the power-on intensity reset was undone, and any that failed — see gotcha 2 |
 | `sensor.arozen_eon_pro_2_datapoints_recon` | Diagnostic: the raw datapoints. Scaffolding — see [Status](#status) |
 
 The device diffuses in **bursts**: 30 seconds of mist, then a pause. The intensity level sets
@@ -82,11 +83,19 @@ None of them is the integration inventing something; all four are the firmware.
 not the output — L1 mists every minute, L6 every forty. The entity labels say so
 (`L4 · every 10 min`) precisely so nobody has to remember it.
 
-**2. Turning it *on* resets intensity to L1 and the timer to 4 hours.** The device does this
-itself on every power-**on**, whoever performs it — Home Assistant, the phone app, or the
-physical remote. It is not something the integration can decline to do, and the phone app does
-not escape it either. So if your automation power-cycles the diffuser, it must set the
-intensity again *after* turning it back on:
+**2. Turning it *on* resets intensity to L1 and the timer to 4 hours — the integration puts
+the intensity back.** The device does this itself on every power-**on**, whoever performs it —
+Home Assistant, the phone app, or the physical remote — and the phone app does not undo it
+either. The integration does ([#14](https://github.com/luguina/arozen_ha_controller/issues/14)): it remembers the level from ordinary polling
+and writes it back the moment it sees the device switched on. Immediately when Home Assistant
+is what turned it on, so `switch.turn_on` returns with the level already right; within one
+poll interval when the remote or the app did, so expect a few seconds at L1 first.
+`sensor.…_intensity_restores` counts them and carries the error if one ever fails.
+
+**The timer is on you**, deliberately: an auto-off falling back to four hours is a safety
+default, and overriding a safety default is a different act from repairing a defect
+([ADR-006](docs/decisions.md#adr-006--correct-the-power-on-intensity-reset-and-only-that-one)). So an automation that power-cycles the diffuser still has to set the
+timer again *after* turning it back on:
 
 ```yaml
 automation:
@@ -97,17 +106,16 @@ automation:
     actions:
       - action: switch.turn_on
         target: { entity_id: switch.arozen_eon_pro_2 }
-      # After the switch, never before: the previous power-off reset this to L1.
-      - action: select.select_option
-        target: { entity_id: select.arozen_eon_pro_2_intensity }
-        data: { option: "L4 · every 10 min" }
+      # Intensity comes back on its own. The timer does not — the power-on just armed 4 h.
+      # After the switch, never before: turning on is what resets it.
       - action: select.select_option
         target: { entity_id: select.arozen_eon_pro_2_timer }
         data: { option: "8 hours" }
 ```
 
-*(Why the phone app appears not to lose the setting, and what to do about it, is the open
-question in [Status](#status).)*
+*(Set the intensity explicitly anyway if your automation wants a **specific** level. The
+restore puts back whatever the device was last seen at, which is the right default and is not
+the same thing as the level you had in mind.)*
 
 **3. Turning it on arms a 240-minute countdown by itself.** `sensor.…_timer_remaining` will
 read `240` after a switch-on even though the Timer select says `Continuous`. That is the
@@ -167,8 +175,11 @@ capture-specific rules are in [docs/captures/README.md](docs/captures/README.md#
 | | |
 |---|---|
 | ✅ | Power, intensity, timer, battery, nozzle state — all mapped, write-verified against the device, and covered by tests |
-| ✅ | Config flow, options flow and all eight entities verified end to end against a real Home Assistant instance and the real diffuser |
-| ✅ | **What the phone app's power-off does that ours does not: nothing.** [#5](https://github.com/luguina/arozen_ha_controller/issues/5)'s remote walk settled it and overturned the premise — the reset belongs to the power-**on** edge, and the app loses intensity exactly like we do. Gotcha #2 above is the corrected version. Restoring it is [#14](https://github.com/luguina/arozen_ha_controller/issues/14), a capability the app does not have |
+| ✅ | Config flow, options flow and all nine entities verified end to end against a real Home Assistant instance and the real diffuser |
+| ✅ | **What the phone app's power-off does that ours does not: nothing.** [#5](https://github.com/luguina/arozen_ha_controller/issues/5)'s remote walk settled it and overturned the premise — the reset belongs to the power-**on** edge, and the app loses intensity exactly like we do. Gotcha #2 above is the corrected version |
+| ✅ | **Intensity survives a power cycle** ([#14](https://github.com/luguina/arozen_ha_controller/issues/14)) — remembered from ordinary polling, written back on the on edge from any source, and never taught the firmware's default *by* the reading that carries the reset — which is what would otherwise restore L1 for ever. A power-on that reports some *other* level means a human got there first, and that one does teach. The countdown is armed on the same edge and is deliberately left alone ([ADR-006](docs/decisions.md#adr-006--correct-the-power-on-intensity-reset-and-only-that-one)) |
+| ✅ | **The restore is verified on the real diffuser** (2026-08-21), from both directions: Home Assistant's own switch, where L4 was back before the turn-on call returned, and the **physical remote**, where it came back on the following poll. The guard holds too — switch on with the remote and press intensity, and the level you chose survives untouched. Fifteen checks, two restores, no failures. The restore *counter* is what proves the firmware did reset it, because a restore only fires when the device reports L1 on the on edge |
+| ✅ | The **entity wiring** is verified too, in a throwaway Home Assistant driven over its own REST API: the config flow validates and creates the entry, exactly the nine entities appear with the ids listed above and nothing else, and after `switch.turn_off` / `switch.turn_on` the intensity select still reads `L4 · every 10 min` with the restores sensor at 1 and `remembered_level: L4` |
 | ✅ | **DP 7 is the frontal LED; DP 102 is charging status** (`zzcd`/`wcd`/`cdwc` — 正在充电 / 未充电 / 充电完成). Neither was reachable by pressing buttons: the LED had been off all session, and charging needs a cable |
 | ❓ | **DP 104** (`kk`) is the last unidentified datapoint. It has not moved through an app walk, a remote walk, an LED toggle or a charger event; a firmware constant is the leading explanation. The `datapoints_recon` diagnostic sensor watches it, and gets deleted once it is named |
 | ⏸️ | Whether the phone app has to keep working alongside Home Assistant ([ADR-004](docs/decisions.md#adr-004--pending--must-the-phone-app-keep-working)) |
@@ -187,16 +198,21 @@ custom_components/arozen_eon/     the integration. dp.py is the only file that k
   switch.py                       power — DP 2, the command DP
   binary_sensor.py                "Misting" — DP 103, the nozzle state the device drives
   select.py                       intensity (DP 3) and countdown (DP 4)
-  sensor.py                       battery, timer remaining, poll diagnostics, raw DPs
+  sensor.py                       battery, timer remaining, poll and restore
+                                  diagnostics, raw DPs
+  coordinator.py                  the poll loop, poll health, and the intensity memory
+                                  that survives the firmware's power-on reset
 docs/
   why-not-the-official-integration.md   why this exists: the core source trace, the empty
                                         cloud schema, the topology, and the prior art
   datapoints.md                   the DP map, its evidence, and its open questions
   research/dossier.md             the recon record, including §6.7's correction
-  hardware.md · decisions.md      the device itself; ADR-001…005
+  hardware.md · decisions.md      the device itself; ADR-001…006
   captures/                       probe output and DP diffs (credentials redacted)
 tools/                            dp_dump · dp_diff · dp_watch · dp_set · mq_listen —
-                                  the recon loop, spelled out in tools/README.md
+                                  the recon loop, spelled out in tools/README.md.
+                                  verify_restore.py is the odd one out: it drives the
+                                  integration itself against the real device
 tests/                            pytest. test_dp.py runs with no Home Assistant
                                   installed; the entity tests need the pinned core
 ```
