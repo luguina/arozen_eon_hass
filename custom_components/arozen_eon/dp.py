@@ -41,7 +41,11 @@ from typing import Any, Final
 #: and that the phone app avoided it by sending something more than a DP 2 write. Both
 #: halves were wrong. The remote walk of 2026-08-21 measured both edges with the app closed,
 #: then measured the app itself - three power-ons, two sources, all identical, and nobody
-#: re-applied anything. Restoring intensity is issue #14.
+#: re-applied anything.
+#:
+#: The integration now puts intensity back on this edge (#14) - see
+#: coordinator.IntensityMemory. It deliberately does not put the countdown back; ADR-006
+#: has the reasoning for treating the two defaults differently.
 DP_POWER: Final[int | None] = 2
 
 #: Whether the nozzle is misting *right now*: "kai" (开, open) / "guan" (关, closed).
@@ -65,6 +69,8 @@ MISTING_ON: Final = "kai"
 MISTING_OFF: Final = "guan"
 
 #: Intensity level, L1-L6. Writing it is accepted and DP 106 mirrors the pause seconds ✅.
+#: Cleared to INTENSITY_POWER_ON_DEFAULT by every power-on, whoever performs it; the
+#: coordinator writes it back (see DP_POWER).
 DP_INTENSITY: Final[int | None] = 3
 
 #: Burst length in seconds. Fixed at 30 by design, not by coincidence: the manual specifies
@@ -116,6 +122,16 @@ DP_BATTERY: Final[int | None] = 101
 #: and L6 the weakest**. The entity layer is responsible for not making a user guess that.
 INTENSITY_PAUSE_S: Final = {"L1": 60, "L2": 180, "L3": 300, "L4": 600, "L5": 1200, "L6": 2400}
 INTENSITY_LEVELS: Final = tuple(INTENSITY_PAUSE_S)
+
+#: What the firmware sets intensity to on every power-on. Observed on all three power-ons of
+#: the remote walk (two from the remote with the phone app closed, one from the app), in the
+#: same status record as ``2: true`` each time.
+#:
+#: A measured device fact, kept here with the rest of them rather than written into the
+#: restore logic, because that logic keys on it: a power-on that reports *anything else* means
+#: somebody chose a level in between, and their choice is newer than our memory. If a firmware
+#: update ever moves this default, this constant is the one line that has to change.
+INTENSITY_POWER_ON_DEFAULT: Final = "L1"
 
 #: Human labels for the levels, derived from the pause table rather than written out, so a
 #: label can never drift from the interval it claims. "L1 · every 1 min" keeps the app's own

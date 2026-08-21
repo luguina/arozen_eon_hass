@@ -171,6 +171,59 @@ it is not rediscovered from scratch.
 
 ---
 
+## ADR-006 — Correct the power-on intensity reset, and only that one
+
+**Status:** accepted · **Date:** 2026-08-21
+
+**Context.** Switching the diffuser on puts the firmware back to a power-on default state, in
+a single status record: intensity cleared to `L1`, the countdown re-armed (DP 4 → `3h`, DP 5 →
+240 minutes), and on two of six captured off-edges the LED (DP 7) went down with power too.
+This happens whoever turns the device on — Home Assistant, the phone app, or the physical
+remote — and the app does not undo any of it either
+([remote walk](captures/remote-walk-2026-08-21.jsonl)). So the question is not "can we avoid
+causing this" — we never caused it — but **which of the device's own defaults, if any, the
+integration should overrule on the user's behalf.**
+
+**Decision.** Restore **intensity** ([#14](https://github.com/luguina/arozen_ha_controller/issues/14)). Leave the **countdown** alone. Take
+no position on the LED until it has a write test ([#15](https://github.com/luguina/arozen_ha_controller/issues/15)).
+
+**Why the two are not the same case — which is the entire reason this entry exists.** They
+look identical: both are settings, both are silently overwritten on the same edge, by the same
+firmware, in the same record. The symmetry is misleading.
+
+* **Losing intensity is a defect.** The user chose a level, the device is running, and it is
+  running at a level nobody asked for. There is no reading of `L1` as a safe fallback — it is
+  simply the *strongest* setting, bursting ten times more often than L6. Nothing is protected
+  by getting it wrong.
+* **The countdown falling back to four hours is a safety default,** and overriding a safety
+  default is a different act from repairing a defect. Someone who set "Continuous" and gets
+  four hours has a diffuser that stops early and notices. Someone whose "Continuous" we
+  faithfully restore has one that runs until the tank is dry — possibly after a power cut
+  restarted it unattended. The two failure modes are not symmetric, and the quiet one is the
+  worse one to choose on somebody's behalf.
+
+**What the restore deliberately does not do.**
+
+* It does not fire when the device reports any level *other* than `L1` at the power-on. An
+  external power-on is not noticed until the next poll — up to a minute — and a non-default
+  level by then means a human got there first. Their choice is newer than our memory.
+* It does not persist across a Home Assistant restart. A power-on that happens while HA is
+  down leaves no edge to witness, and a stored preference could not be told apart from a level
+  the user set deliberately in the meantime.
+* It does not fake success. A failed restore leaves the intensity select reporting `L1`,
+  because `L1` is what the device is running at; the "Intensity restores" diagnostic sensor
+  carries the count and the error. Same principle as `sensor.…_failed_polls`: a fix that hides
+  a fault ships with the meter that still records it.
+
+**What would change this.** For the countdown: evidence that restoring it is what the device's owner
+actually wants — most plausibly running on "Continuous" and being cut off at four hours often
+enough to say so. That is a preference and it is his call, not a finding. In the other
+direction: if the intensity restore is ever seen fighting something that also writes DP 3 (a
+Tuya scene, a schedule pushed from the app), the "somebody got there first" guard stops being
+sufficient and the scope narrows to Home-Assistant-initiated power-ons only.
+
+---
+
 ## Pending
 
 | # | Decision | Blocked on |

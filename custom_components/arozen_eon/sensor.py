@@ -2,15 +2,17 @@
 
 Three kinds of sensor, deliberately:
 
-* **Failed polls** — the measurement channel that tolerated failures would otherwise erase.
-  Same reasoning as sibling_beacon's sensor.py: a fix that hides a fault must ship with the
-  meter that still records it.
+* **Failed polls** and **Intensity restores** — the two measurement channels that the
+  fixes above them would otherwise erase. Same reasoning as sibling_beacon's sensor.py: a fix
+  that hides a fault must ship with the meter that still records it. A tolerated poll failure
+  leaves no visible trace, and a *successful* intensity restore leaves no visible trace that
+  the firmware threw the level away at all — so both get counted.
 * **Battery** (DP 101) and **countdown remaining** (DP 5) — real device readings,
   write-verified as mirrors on 2026-08-21 (docs/datapoints.md). These go unavailable with
   the device, unlike the diagnostics.
 * **Datapoints** — the raw DP set, exposed as attributes. This was the recon phase's primary
   instrument inside Home Assistant, before the map existed. It stays as scaffolding while
-  docs/datapoints.md has open questions (DP 102, 104) — it is how new DPs would be noticed —
+  docs/datapoints.md has an open question (DP 104) — it is how new DPs would be noticed —
   and can be deleted once the map settles. DP 2 came off that list the hard way: it was the
   power switch all along, sitting unidentified while the switch entity wrote to the valve.
 """
@@ -44,6 +46,7 @@ async def async_setup_entry(
     async_add_entities(
         [
             ArozenFailedPollsSensor(coordinator),
+            ArozenIntensityRestoresSensor(coordinator),
             ArozenBatterySensor(coordinator),
             ArozenCountdownRemainingSensor(coordinator),
             ArozenDatapointsSensor(coordinator),
@@ -93,6 +96,47 @@ class ArozenFailedPollsSensor(ArozenDiagnosticSensor):
         }
 
 
+class ArozenIntensityRestoresSensor(ArozenDiagnosticSensor):
+    """How often the firmware's power-on intensity reset has been undone (#14).
+
+    The device clears intensity to L1 every time it is switched on, by any source, and the
+    coordinator writes the level back. That fix works, which is precisely why it needs a
+    meter: once the level is right again there is nothing left to show it was ever wrong.
+    A counter in the recorder is where "this fired forty times last night" becomes visible,
+    and forty restores in a night means something is power-cycling the diffuser.
+
+    The failures are the other half. A restore that does not land leaves the device running at
+    L1 with the user's level lost, and the intensity select will show L1 — which is the truth,
+    not a lie, but says nothing about why. ``last_error`` says why.
+    """
+
+    _attr_name = "Intensity restores"
+    _attr_icon = "mdi:backup-restore"
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+
+    def __init__(self, coordinator: ArozenCoordinator) -> None:
+        super().__init__(coordinator, "intensity_restores")
+
+    @property
+    def native_value(self) -> int:
+        """Restores the device accepted since the config entry loaded."""
+        return self.coordinator.intensity.restored
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        memory = self.coordinator.intensity
+        return {
+            "failed": memory.failures,
+            "last_error": memory.last_error,
+            # The level that would be written after the next power-on, and None when nothing
+            # has taught us one yet. Worth showing: it is the whole state of the memory, and
+            # a restore that declines because it remembers nothing looks identical from
+            # outside to one that declines because the level is already right.
+            "remembered_level": memory.wanted,
+            "confirmed": not memory.unconfirmed,
+        }
+
+
 class ArozenBatterySensor(ArozenEntity, SensorEntity):
     """Battery percent (DP 101). The unit is mains-powered but has a battery too."""
 
@@ -132,7 +176,7 @@ class ArozenCountdownRemainingSensor(ArozenEntity, SensorEntity):
 class ArozenDatapointsSensor(ArozenDiagnosticSensor):
     """The raw DP set, as reported by the last successful poll.
 
-    Scaffolding from the recon phase, kept while DP 102 and 104 are still unidentified:
+    Scaffolding from the recon phase, kept while DP 104 is still unidentified:
     it is the way to watch DPs move while toggling controls in the Tuya app, from the Home
     Assistant UI. State is the count of DPs seen; the set itself is in the attributes.
     Delete this entity once the map settles.

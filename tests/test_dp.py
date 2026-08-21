@@ -76,4 +76,9 @@ def test_current_observed_map():
     assert dp.INTENSITY_PAUSE_S == {
         "L1": 60, "L2": 180, "L3": 300, "L4": 600, "L5": 1200, "L6": 2400,
     }
+    # What the firmware puts intensity back to on every power-on, observed on all three
+    # power-ons of the remote walk. The restore keys on it (coordinator.IntensityMemory),
+    # so a typo here would not fail loudly - it would just quietly stop restoring.
+    assert dp.INTENSITY_POWER_ON_DEFAULT == "L1"
+    assert dp.INTENSITY_POWER_ON_DEFAULT in dp.INTENSITY_LEVELS
     assert dp.unmapped_functions() == []
