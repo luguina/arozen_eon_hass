@@ -1,14 +1,14 @@
 name: Validate
 
-# The packaging gate. Neither of these looks at the integration's behaviour — they check
-# that Home Assistant and HACS can *load* it at all, which is a failure that otherwise
-# surfaces at startup in the project owner's house rather than at review time here.
+# The packaging gate. This does not look at the integration's behaviour — it checks that
+# Home Assistant can *load* it at all, which is a failure that otherwise surfaces at
+# startup in a house rather than at review time here.
 
 on:
   push:
     branches: [main]
   pull_request:
-  # Both actions validate against rules that move without this repository changing: a core
+  # hassfest validates against rules that move without this repository changing: a core
   # release can tighten the manifest schema months after the last commit. The scheduled run
   # turns that into a Monday notification instead of a mystery failure on the next PR.
   schedule:
@@ -28,25 +28,21 @@ jobs:
       # one tag on that repository (1.0.0) predates the action's current shape.
       - uses: home-assistant/actions/hassfest@master
 
-  hacs:
-    name: HACS (repository layout)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: hacs/action@main
-        with:
-          category: integration
-          # Two checks are ignored, and neither is a defect being papered over:
-          #
-          #   brands — HACS wants the domain registered in home-assistant/brands, which is
-          #     the icon set shipped to every Home Assistant install. This integration
-          #     drives one diffuser in one house and is not being submitted there.
-          #   topics — the GitHub repository has no topics. That is discoverability
-          #     metadata for a private repository nobody can discover.
-          #
-          # Everything else stays on, including the checks that actually matter here:
-          # hacs.json, the custom_components/ layout, and the manifest's version key.
-          ignore: brands topics
-          # The job's own status is the signal. A bot comment on every pull request
-          # competes with the review thread, which is where findings get triaged.
-          comment: "false"
+# There is no `hacs/action` job here, and that is a considered removal rather than an
+# omission. It was in this file first and could not do the job:
+#
+#   Its metadata checks go through the authenticated GitHub API, but every *file content*
+#   check downloads from https://raw.githubusercontent.com/{repo}/{ref}/{path} with no
+#   credentials. This repository is private, so those URLs 404, the download returns None,
+#   and the validator reports the file as invalid. The first run failed on exactly
+#   `hacsjson` and `integration_manifest` — the two content-based checks — while every
+#   tree- and metadata-based check passed.
+#
+# Ignoring those two would have left five of seven checks suppressed: a job that validates
+# almost nothing while looking like it validates something. So the checks moved to
+# tests/test_packaging.py, which applies HACS's own schemas to the working tree — the real
+# rules, on the actual files, with no network and no dependence on the repository being
+# public. That file documents the trade.
+#
+# If this repository is ever made public, restoring the job is worth it: it would then also
+# cover `brands` and `license`, which a local test cannot.
