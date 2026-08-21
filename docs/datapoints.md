@@ -1,7 +1,14 @@
 # Arozen EON Pro 2 — datapoint map
 
-**Status: ❓ NOTHING HERE HAS BEEN OBSERVED ON THE DEVICE.** Every table below is either
-Tuya's published standard or an empty form waiting to be filled. Do not build against it.
+**Status: ✅ observed and write-verified on the device (2026-08-21), with three datapoints
+still unidentified.** The map below comes from a control walk, local write tests, a duty-cycle
+measurement taken with nothing writing to the device, and the printed manual. The integration
+is built against it.
+
+Two things to read carefully rather than skim. **The `xxj` hypothesis in the next section was
+tested and failed** — it is kept because a rejected hypothesis is part of the record, not
+because it describes this device. And [§Still unknown](#still-unknown) is the honest list;
+where this file says ❓ it means ❓, and nothing downstream should round that up to an answer.
 
 ## Why this file is not called `protocol.md`
 
@@ -66,7 +73,7 @@ just not one to plan around.
 
 ---
 
-## Observed — to be filled in
+## Observed
 
 ### Device identity
 
@@ -76,9 +83,9 @@ just not one to plan around.
 | Product ID (`product_id`) | ✅ `uh3xooop1btksbtk` — cloud device record, 2026-08-21. ⚠️ The value previously recorded here (`jidyk1ybp0dqlteg`, from the LAN broadcast) belongs to a **dehumidifier** on the same account — see dossier §6.1 for the misidentification |
 | Product name as registered | ✅ "Arozen Eon pro 2-" — cloud device record |
 | Registered cloud schema | ✅ **EMPTY** — `functions: []`, `status: []` (dossier §6.4). The DPs exist but are undeclared; only a live dump reveals them |
-| Protocol version | ❓ (the 3.5 recorded earlier was the misidentified dehumidifier) |
-| Firmware / module | ❓ |
-| Local IP | ❓ device not reachable on the LAN (dossier §6.3) |
+| Protocol version | ✅ **3.5** — reported by `tinytuya scan` after the re-pair and used by every successful local read and write since (dossier §6.3). The identical value recorded *before* that came from the misidentified dehumidifier and was a coincidence, not a source |
+| Firmware / module | ❓ — the local status payload carries no version field, which is why the device registry reports none rather than inventing one |
+| Local IP | ✅ reachable on the main LAN since the re-pair, 2026-08-21 (dossier §6.3). Address redacted — see [captures/README.md](captures/README.md#redaction-rule) |
 | Device ID | ✅ `bfdeadbeefdeadbeef0001` — cloud device record, 2026-08-21 |
 
 ### Datapoints
@@ -217,6 +224,7 @@ half-answers being treated as answers.
 
 | Date | What |
 |---|---|
+| 2026-08-21 (late) | Header corrected. This file had opened with "NOTHING HERE HAS BEEN OBSERVED ON THE DEVICE" through the entire recon that observed all of it — a first line that contradicted its own contents. The *Device identity* table's protocol-version and local-IP rows were stale from the same period. |
 | 2026-08-10 | Created. Standard `xxj` set recorded as the hypothesis; nothing observed yet. |
 | 2026-08-21 (late) | Manual consulted. Intensity table confirmed including the never-observed L5 (20 min); the countdown's four settings confirmed and `"3h"` identified as the mislabelled 4-hour option. Two phantom timer options (`2h`, `4h`) removed from the integration. |
 | 2026-08-21 (evening) | **Correction.** DP 103 reclassified from power *command* to nozzle *status*: measured untouched, it cycles itself (30 s open / pause-interval closed). Power is DP 2, write-verified both directions. The integration's switch was rewritten onto DP 2 and 103 became a read-only `binary_sensor`. |
