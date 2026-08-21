@@ -1,0 +1,22 @@
+# Dependency updates.
+#
+# github-actions only, and the omission of pip is deliberate rather than an oversight.
+# Every pin in requirements_test.txt is a decision documented in that file: homeassistant
+# tracks the version the Home Assistant box actually runs, and ruff is frozen precisely so
+# a new release cannot turn CI red on a morning nobody changed anything. A pip ecosystem
+# here would spend its life opening pull requests to undo both.
+#
+# Actions are the opposite case: they are unversioned infrastructure that silently rots,
+# and a bumped SHA has no bearing on what the integration does.
+
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+      - "priority: low"
+    commit-message:
+      prefix: "ci"

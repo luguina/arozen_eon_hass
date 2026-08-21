@@ -1,0 +1,52 @@
+name: Validate
+
+# The packaging gate. Neither of these looks at the integration's behaviour — they check
+# that Home Assistant and HACS can *load* it at all, which is a failure that otherwise
+# surfaces at startup in the project owner's house rather than at review time here.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Both actions validate against rules that move without this repository changing: a core
+  # release can tighten the manifest schema months after the last commit. The scheduled run
+  # turns that into a Monday notification instead of a mystery failure on the next PR.
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hassfest:
+    name: hassfest (manifest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      # @master is the documented usage and what every Home Assistant repository runs. The
+      # one tag on that repository (1.0.0) predates the action's current shape.
+      - uses: home-assistant/actions/hassfest@master
+
+  hacs:
+    name: HACS (repository layout)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: hacs/action@main
+        with:
+          category: integration
+          # Two checks are ignored, and neither is a defect being papered over:
+          #
+          #   brands — HACS wants the domain registered in home-assistant/brands, which is
+          #     the icon set shipped to every Home Assistant install. This integration
+          #     drives one diffuser in one house and is not being submitted there.
+          #   topics — the GitHub repository has no topics. That is discoverability
+          #     metadata for a private repository nobody can discover.
+          #
+          # Everything else stays on, including the checks that actually matter here:
+          # hacs.json, the custom_components/ layout, and the manifest's version key.
+          ignore: brands topics
+          # The job's own status is the signal. A bot comment on every pull request
+          # competes with the review thread, which is where findings get triaged.
+          comment: "false"
