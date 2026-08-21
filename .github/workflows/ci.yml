@@ -36,10 +36,13 @@ jobs:
           cache: pip
           cache-dependency-path: requirements_test.txt
 
+      # `python -m pip` throughout rather than a bare `pip`: it is guaranteed to be the
+      # pip belonging to the interpreter setup-python just selected, and this workflow's
+      # whole premise is that the interpreter is the thing that must not drift.
       - name: Install pinned test dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements_test.txt
+          python -m pip install -r requirements_test.txt
 
       # The step this workflow exists for.
       #
