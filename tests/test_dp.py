@@ -43,6 +43,7 @@ def test_get_preserves_falsy_values():
 def test_unmapped_functions_matches_the_map():
     mapped = {
         "power": dp.DP_POWER,
+        "misting": dp.DP_MISTING,
         "intensity": dp.DP_INTENSITY,
         "work_seconds": dp.DP_WORK_S,
         "pause_seconds": dp.DP_PAUSE_S,
@@ -59,8 +60,12 @@ def test_current_observed_map():
     device ever disagrees with this test, the device wins — update dp.py, datapoints.md,
     and this test together.
     """
-    assert dp.DP_POWER == 103
-    assert (dp.POWER_ON, dp.POWER_OFF) == ("kai", "guan")
+    # Power is the bool DP 2, write-verified both ways. The valve state is DP 103, which
+    # the device drives itself - the two are separate DPs and separate entities, and
+    # collapsing them is the exact bug this map was corrected for.
+    assert dp.DP_POWER == 2
+    assert dp.DP_MISTING == 103
+    assert (dp.MISTING_ON, dp.MISTING_OFF) == ("kai", "guan")
     assert dp.DP_INTENSITY == 3
     assert dp.DP_WORK_S == 105
     assert dp.DP_PAUSE_S == 106

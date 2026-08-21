@@ -1,13 +1,22 @@
 """Power switch for the Arozen EON Pro 2.
 
-Power is DP 103, a string DP: "kai" (开, on) / "guan" (关, off) — not the boolean DP 1 the
-standard xxj set would suggest. Observed on the device 2026-08-21 (docs/datapoints.md):
-the state tracks every app power toggle, and off-writes are verified to stick.
+Power is DP 2, a plain bool, write-verified both ways on the device 2026-08-21: ``True``
+starts it misting within ~2 s, ``False`` stops it.
 
-⚠️ The on-write is the one unverified command on the device: acknowledged but reverted
-during the write tests, pending physical observation (docs/datapoints.md "Still unknown").
-The entity writes it anyway — it is the best candidate the evidence offers — but if the
-device ever answers an on-write by actually turning on, delete this comment.
+Not DP 103, which an earlier revision of this file drove. 103 is the *valve* — the device
+cycles it open for 30 s and closed for the intensity's pause interval, on its own — so
+writing it produced a switch that appeared to work in the off direction (it interrupts the
+burst) and silently failed in the on direction (the firmware reasserts the real state).
+See dp.py for the measurement and docs/datapoints.md §Datapoints for the evidence. The
+valve now has its own read-only entity in binary_sensor.py.
+
+⚠️ Two firmware behaviours ride along with a power write, and the integration does not
+hide them, because pretending they are not there would make the entity lie:
+
+* turning **on** arms the device's default auto-off — DP 5 goes to 240 minutes by itself.
+* turning **off** resets intensity to L1 and the countdown to "3h". The phone app's own
+  off preserves both, so the app sends something more than a DP 2 write; what, is not yet
+  known (docs/datapoints.md "Still unknown").
 """
 
 from __future__ import annotations
@@ -42,7 +51,12 @@ async def async_setup_entry(
 
 
 class ArozenPowerSwitch(ArozenEntity, SwitchEntity):
-    """On/off for the diffuser."""
+    """On/off for the diffuser.
+
+    "On" means the duty cycle is running, not that the nozzle is misting at this instant —
+    the device spends most of an interval paused. The instantaneous state is the Misting
+    binary sensor; conflating the two is precisely the bug this entity was rebuilt to fix.
+    """
 
     # The device's primary control, so it takes the device's own name rather than a suffix.
     _attr_name = None
@@ -53,28 +67,23 @@ class ArozenPowerSwitch(ArozenEntity, SwitchEntity):
 
     @property
     def is_on(self) -> bool | None:
-        """Whether the diffuser is on. None until the first successful read.
-
-        Comparison, not truthiness: the DP reports the strings "kai"/"guan", and a bare
-        bool("guan") is True — the classic string-enum-as-boolean bug.
-        """
+        """Whether the diffuser is running. None until the first successful read."""
         if self.coordinator.data is None:
             return None
         value = dp.get(self.coordinator.data, dp.DP_POWER)
-        return None if value is None else value == dp.POWER_ON
+        return None if value is None else bool(value)
 
     async def async_turn_on(self, **kwargs) -> None:
-        await self._async_set(dp.POWER_ON)
+        await self._async_set(True)
 
     async def async_turn_off(self, **kwargs) -> None:
-        await self._async_set(dp.POWER_OFF)
+        await self._async_set(False)
 
-    async def _async_set(self, value: str) -> None:
+    async def _async_set(self, value: bool) -> None:
         assert dp.DP_POWER is not None  # the entity is not created otherwise
         try:
             await self.coordinator.async_set_dp(dp.DP_POWER, value)
         except ArozenError as err:
             raise HomeAssistantError(
-                f"Failed to turn the Arozen EON Pro 2 "
-                f"{'on' if value == dp.POWER_ON else 'off'}: {err}"
+                f"Failed to turn the Arozen EON Pro 2 {'on' if value else 'off'}: {err}"
             ) from err
