@@ -30,7 +30,7 @@ jobs:
       # requirements_test.txt pins homeassistant==2026.8.1, which only resolves on 3.14:
       # on 3.12 pip silently backtracks to 2025.1.4 and on 3.13 to 2026.2.3. Both install
       # cleanly, both pass, and both test a core nobody runs.
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
           cache: pip
