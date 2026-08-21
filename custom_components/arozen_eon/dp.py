@@ -112,6 +112,52 @@ DP_COUNTDOWN_REMAINING: Final[int | None] = 5
 #: including through pause phases, which is discharge rather than consumption ✅.
 DP_BATTERY: Final[int | None] = 101
 
+#: Charging status, a three-state string ✅. Identified 2026-08-21 (night) by plugging the
+#: charger in and out: "wcd" -> "zzcd", then back (docs/captures/remote-walk-2026-08-21.jsonl,
+#: the two 102 movements). Neither movement carries an attributing note, so the capture alone
+#: does not say what caused them - what corroborates it is DP_BATTERY, which reverses
+#: direction across both: falling 91->80 before the first, rising 80->88 after it, falling
+#: again after the second. A charging-state DP that flips exactly when the battery stops
+#: draining and starts filling is not a coincidence of three-letter strings.
+#:
+#: **Status, not command**, and never written - the values are the device reporting on its own
+#: cable, so there is nothing here for us to command. No write test was run and none is wanted.
+#:
+#: The stimulus is the point: no button walk of any length could have found this DP, because
+#: it needs a cable rather than a control (dossier §6.8).
+#:
+#: ⚠️ **"cdwc" does not mean 100 %.** The control walk recorded it at DP_BATTERY 99 with the
+#: gauge still climbing to 100 twenty seconds later (docs/captures/dp-watch-2026-08-21.txt).
+#: Nor is it stable: a mist burst taken at 100/"cdwc" dropped the gauge to 96 and flipped this
+#: to "zzcd" in the same poll, and it had not returned eight minutes and two further bursts
+#: later (docs/captures/charging-cdwc-2026-08-22.txt). It *had* returned when the device was
+#: read again five minutes after that capture stopped - so the round trip does complete, but
+#: the "zzcd" -> "cdwc" edge itself has still never been caught in a capture, and no code here
+#: assumes anything about how long it takes.
+#:
+#: Whether it freezes while the device is off - the way DP_MISTING and DP_PAUSE_S demonstrably
+#: do - is **not settled, but the evidence leans against a freeze**: it read "cdwc" in the same
+#: record that took DP_POWER to false, and "wcd" four and a half hours later with DP_POWER
+#: still false. binary_sensor.py deliberately does not gate this on power; see
+#: ArozenChargingBinarySensor.
+DP_CHARGING: Final[int | None] = 102
+
+#: Pinyin initials, the same house style as DP_MISTING's kai/guan - which is corroboration
+#: that the decode is right rather than a coincidence of short strings.
+CHARGING_ACTIVE: Final = "zzcd"  # 正在充电 zhèngzài chōngdiàn - charging
+CHARGING_OFF: Final = "wcd"  # 未充电 wèi chōngdiàn - not charging
+CHARGING_COMPLETE: Final = "cdwc"  # 充电完成 chōngdiàn wánchéng - charge complete
+
+#: Device value -> a name for it. This map is what makes an unrecognised value *unknown*
+#: rather than *not charging*: membership is checked before the comparison, so a firmware that
+#: grows a fourth state says so instead of being silently folded into "off". It also carries
+#: the third state onto the entity, which a bool cannot hold - see ArozenChargingBinarySensor.
+CHARGING_STATES: Final = {
+    CHARGING_ACTIVE: "charging",
+    CHARGING_OFF: "not_charging",
+    CHARGING_COMPLETE: "complete",
+}
+
 #: Intensity level -> pause seconds. **Confirmed against the printed manual** (the project owner,
 #: 2026-08-21), which specifies a 30 s emission followed by a pause of 1/3/5/10/20/40
 #: minutes for L1-L6. Five of the six were also observed on the device via DP 106; L5 was

@@ -22,7 +22,11 @@ import pytest
 pytest.importorskip("homeassistant", reason="entity tests need Home Assistant installed")
 
 from custom_components.arozen_eon.coordinator import PollHealth
-from custom_components.arozen_eon.binary_sensor import ArozenMistingBinarySensor
+from custom_components.arozen_eon import binary_sensor
+from custom_components.arozen_eon.binary_sensor import (
+    ArozenChargingBinarySensor,
+    ArozenMistingBinarySensor,
+)
 from custom_components.arozen_eon.switch import ArozenPowerSwitch
 
 
@@ -186,6 +190,155 @@ def test_misting_exposes_the_duty_cycle():
         FakeCoordinator(data={"103": "kai", "105": 30, "106": 300})
     )
     assert sensor.extra_state_attributes == {"work_seconds": 30, "pause_seconds": 300}
+
+
+# -- Charging binary sensor ---------------------------------------------------------------
+#
+# Three device states into a two-state device class. Every one of these tests exists to pin
+# a place where that collapse could lose or invent information.
+
+
+def test_charging_is_none_before_first_read():
+    assert ArozenChargingBinarySensor(FakeCoordinator(data=None)).is_on is None
+
+
+def test_charging_reads_the_three_observed_states():
+    """Both real transitions in the remote-walk capture, plus the state seen on the cable."""
+    assert ArozenChargingBinarySensor(FakeCoordinator(data={"102": "zzcd"})).is_on is True
+    assert ArozenChargingBinarySensor(FakeCoordinator(data={"102": "wcd"})).is_on is False
+    # Charge complete is not charging - true, and the assertion that costs us the third
+    # state in the bool. It survives in the attributes; see the test below.
+    assert ArozenChargingBinarySensor(FakeCoordinator(data={"102": "cdwc"})).is_on is False
+
+
+def test_charging_unknown_value_reads_none_rather_than_off():
+    """A fourth firmware state is a state we have never seen, not a synonym for "no".
+
+    The deliberate divergence from the misting sensor, which reads an unknown value as off
+    because misting really is binary at the device. Folding an unrecognised charging value
+    into "not charging" would report a plausible lie; None reports the truth and gets
+    noticed.
+    """
+    assert ArozenChargingBinarySensor(FakeCoordinator(data={"102": "xyz"})).is_on is None
+
+
+def test_charging_is_none_when_the_dp_is_absent():
+    # A payload with no DP 102 at all must not read as "not charging".
+    assert ArozenChargingBinarySensor(FakeCoordinator(data={"2": True})).is_on is None
+
+
+def test_charging_is_not_gated_on_power():
+    """Charging an idle diffuser is the ordinary case, and the one this is most wanted for.
+
+    The misting sensor is gated because DP 103 demonstrably freezes while off. DP 102 has
+    never been shown to freeze - both captured transitions happened with the device running
+    - so gating it would trade a real capability for a hypothetical wrong reading.
+    """
+    off_and_charging = FakeCoordinator(data={"2": False, "102": "zzcd"})
+    assert ArozenChargingBinarySensor(off_and_charging).is_on is True
+
+
+def test_charging_keeps_the_third_state_in_the_attributes():
+    sensor = ArozenChargingBinarySensor(FakeCoordinator(data={"102": "cdwc"}))
+    assert sensor.is_on is False
+    assert sensor.extra_state_attributes == {
+        "raw_value": "cdwc",
+        "charge_state": "complete",
+    }
+
+
+def test_charging_attributes_show_the_raw_value_of_an_unknown_state():
+    """When we cannot name it, the raw string is the only place it is visible at all."""
+    sensor = ArozenChargingBinarySensor(FakeCoordinator(data={"102": "xyz"}))
+    assert sensor.extra_state_attributes == {"raw_value": "xyz", "charge_state": None}
+
+
+def test_charging_attributes_are_empty_before_first_read():
+    assert ArozenChargingBinarySensor(FakeCoordinator(data=None)).extra_state_attributes == {}
+
+
+def test_charging_survives_a_non_scalar_dp_value():
+    """A list or dict from the device must read as unknown, not raise out of a property.
+
+    The lookup this entity does is `value in CHARGING_STATES`, and an unhashable value makes
+    that raise TypeError — from inside a property, which Home Assistant surfaces as a broken
+    entity rather than an unknown one. The misting sensor cannot hit this because it compares
+    instead of looking up. Tuya DPs are scalars in practice, so this is a guard rather than an
+    observed failure, but it is the difference between "unknown" and "the entity is dead".
+    """
+    for hostile in ([], {}, [1, 2], {"a": 1}):
+        sensor = ArozenChargingBinarySensor(FakeCoordinator(data={"102": hostile}))
+        assert sensor.is_on is None
+        assert sensor.extra_state_attributes == {"raw_value": hostile, "charge_state": None}
+
+
+def test_charging_reads_none_for_scalar_values_that_are_not_states():
+    # Hashable but wrong: a bool or a number is not a charging state either.
+    for wrong in (True, 0, 1.5, b"zzcd"):
+        assert ArozenChargingBinarySensor(FakeCoordinator(data={"102": wrong})).is_on is None
+
+
+# -- The binary_sensor platform's setup ----------------------------------------------------
+#
+# The only tests in this suite that call an async_setup_entry. They exist because adding the
+# charging entity turned a single-entity early-return into a two-entity list, and that is
+# exactly the kind of edit that silently drops the *other* entity. Nothing else in the test
+# suite would notice: every other entity test constructs its class directly. The live check
+# that would have caught it, tools/verify_ha.py, needs the real diffuser and a power cycle.
+
+
+class FakeEntry:
+    """Just the one attribute async_setup_entry reads."""
+
+    def __init__(self, coordinator):
+        self.runtime_data = coordinator
+
+
+async def _setup_binary_sensors(monkeypatch, **unmapped):
+    """Run the platform's setup, optionally unmapping DPs, and return what it added."""
+    for name, value in unmapped.items():
+        monkeypatch.setattr(binary_sensor.dp, name, value)
+    added = []
+    await binary_sensor.async_setup_entry(
+        None, FakeEntry(FakeCoordinator(data={})), added.extend
+    )
+    return [type(entity).__name__ for entity in added]
+
+
+async def test_setup_adds_both_binary_sensors(monkeypatch):
+    assert await _setup_binary_sensors(monkeypatch) == [
+        "ArozenMistingBinarySensor",
+        "ArozenChargingBinarySensor",
+    ]
+
+
+async def test_setup_without_misting_still_adds_charging(monkeypatch):
+    """An unmapped DP must cost its own entity and no other.
+
+    The regression this guards: the pre-#16 setup returned early when misting was unmapped,
+    which was correct when misting was the only entity here and would have taken charging
+    down with it the moment it was not.
+
+    One unmapping per test, deliberately: monkeypatch unwinds at teardown, not between
+    calls, so two in one test would silently be testing both-unmapped the second time. It
+    passed anyway on the first draft of this file, in the direction that happened not to
+    notice.
+    """
+    assert await _setup_binary_sensors(monkeypatch, DP_MISTING=None) == [
+        "ArozenChargingBinarySensor"
+    ]
+
+
+async def test_setup_without_charging_still_adds_misting(monkeypatch):
+    # The other direction: charging must not be able to take misting down with it either.
+    assert await _setup_binary_sensors(monkeypatch, DP_CHARGING=None) == [
+        "ArozenMistingBinarySensor"
+    ]
+
+
+async def test_setup_adds_nothing_when_both_are_unmapped(monkeypatch):
+    # No entities, and no exception: an empty map is a warning, not a failed setup.
+    assert await _setup_binary_sensors(monkeypatch, DP_MISTING=None, DP_CHARGING=None) == []
 
 
 # -- Availability -------------------------------------------------------------------------

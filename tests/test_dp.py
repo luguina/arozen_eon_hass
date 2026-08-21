@@ -72,6 +72,16 @@ def test_current_observed_map():
     assert dp.DP_COUNTDOWN == 4
     assert dp.DP_COUNTDOWN_REMAINING == 5
     assert dp.DP_BATTERY == 101
+    # Charging, and the three pinyin-initial values observed on the cable. The entity checks
+    # membership in this map before deciding on/off, so a typo would not raise - it would
+    # silently turn a real state into "unknown".
+    assert dp.DP_CHARGING == 102
+    assert (dp.CHARGING_ACTIVE, dp.CHARGING_OFF, dp.CHARGING_COMPLETE) == (
+        "zzcd", "wcd", "cdwc",
+    )
+    assert dp.CHARGING_STATES == {
+        "zzcd": "charging", "wcd": "not_charging", "cdwc": "complete",
+    }
     # The intensity->pause mirror exactly as the device reported it (L5 interpolated).
     assert dp.INTENSITY_PAUSE_S == {
         "L1": 60, "L2": 180, "L3": 300, "L4": 600, "L5": 1200, "L6": 2400,

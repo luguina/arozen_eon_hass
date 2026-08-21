@@ -24,9 +24,11 @@ _LOGGER = logging.getLogger(__name__)
 # settable work/pause pair - the pause seconds (DP 106) are a read-only mirror, exposed as
 # an attribute on the intensity select, and the burst length (DP 105) is fixed at 30 s.
 #
-# BINARY_SENSOR carries exactly one entity, "Misting" (DP 103). It is a platform rather
-# than an attribute on the switch because it is a genuinely separate state: the switch says
-# whether the duty cycle is running, this says whether the nozzle is open right now.
+# BINARY_SENSOR carries two entities, "Misting" (DP 103) and "Charging" (DP 102). Misting is
+# a platform rather than an attribute on the switch because it is a genuinely separate state:
+# the switch says whether the duty cycle is running, this says whether the nozzle is open
+# right now. Charging is separate from the battery sensor for the same kind of reason - a
+# percentage says how full, not which direction it is heading.
 PLATFORMS: list[Platform] = [
     Platform.SWITCH,
     Platform.BINARY_SENSOR,
