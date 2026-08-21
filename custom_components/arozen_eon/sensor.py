@@ -133,7 +133,12 @@ class ArozenIntensityRestoresSensor(ArozenDiagnosticSensor):
             # a restore that declines because it remembers nothing looks identical from
             # outside to one that declines because the level is already right.
             "remembered_level": memory.wanted,
-            "confirmed": not memory.unconfirmed,
+            # Named for the state it actually reports: whether a restore has been written and
+            # not yet seen back. An earlier revision exposed the inverse as `confirmed`, which
+            # read as "the last restore was confirmed" on a fresh load where no restore had
+            # ever been attempted - true by vacuum, and misleading to anyone reading it next
+            # to a count of zero.
+            "restore_unconfirmed": memory.unconfirmed,
         }
 
 

@@ -421,6 +421,11 @@ def test_the_restore_counter_starts_at_zero_and_admits_it_remembers_nothing():
     # Worth surfacing: a restore that declines because it remembers nothing looks identical
     # from outside to one that declines because the level is already right.
     assert sensor.extra_state_attributes["remembered_level"] is None
+    # False here means "no restore is outstanding", which on a fresh load is the honest
+    # reading. The attribute is deliberately named for that rather than for its inverse: a
+    # `confirmed: True` sitting next to a count of zero invites reading it as "the last
+    # restore succeeded" when no restore has ever been attempted.
+    assert sensor.extra_state_attributes["restore_unconfirmed"] is False
 
 
 def test_the_restore_counter_counts_a_restore_the_device_confirmed():
@@ -432,7 +437,7 @@ def test_the_restore_counter_counts_a_restore_the_device_confirmed():
 
     sensor = ArozenIntensityRestoresSensor(FakeCoordinatorForEntity(memory))
     assert sensor.native_value == 1
-    assert sensor.extra_state_attributes["confirmed"] is True
+    assert sensor.extra_state_attributes["restore_unconfirmed"] is False
     assert sensor.extra_state_attributes["failed"] == 0
 
 
@@ -448,7 +453,7 @@ def test_the_restore_counter_carries_the_failure_and_its_reason():
         "failed": 1,
         "last_error": "-test-device: set DP 3 = 'L4' failed",
         "remembered_level": "L4",
-        "confirmed": False,
+        "restore_unconfirmed": True,
     }
 
 
