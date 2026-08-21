@@ -23,7 +23,7 @@ jobs:
     name: hassfest (manifest)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       # @master is the documented usage and what every Home Assistant repository runs. The
       # one tag on that repository (1.0.0) predates the action's current shape.
       - uses: home-assistant/actions/hassfest@master

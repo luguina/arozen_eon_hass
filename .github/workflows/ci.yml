@@ -24,7 +24,7 @@ jobs:
     name: ruff + pytest
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       # Pinned to 3.14 exactly, not to a range, and this is load-bearing.
       # requirements_test.txt pins homeassistant==2026.8.1, which only resolves on 3.14:
