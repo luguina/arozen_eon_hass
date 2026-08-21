@@ -187,6 +187,19 @@ integration should overrule on the user's behalf.**
 **Decision.** Restore **intensity** ([#14](https://github.com/luguina/arozen_ha_controller/issues/14)). Leave the **countdown** alone. Take
 no position on the LED until it has a write test ([#15](https://github.com/luguina/arozen_ha_controller/issues/15)).
 
+**LED update, 2026-08-22 — the position, now that the write test exists.** DP 7 is a command
+DP: both directions were accepted and held for 30 s. It gets a switch, and it gets **no
+restore**, which lands it with the countdown rather than with intensity. The test above is why.
+Intensity is *reset to a known default on a known edge*, wiping a choice the user made — a
+defect, and the correction is stateable in one line. DP 7 moves on a condition **nobody has
+established**: it followed power down and up on two power cycles out of three, and the third
+left it alone, with both episodes on the charger. There is no rule to restore *to*. Writing a
+value back at the device on a pattern that fits two thirds of the evidence would not be
+repairing a defect, it would be inventing one — and the entity would fight the firmware every
+time the guess was wrong, invisibly. **What would change this:** an established rule for the
+self-movement. If DP 7 turns out to be reset on power-on the way intensity is, it becomes the
+same case as intensity and the same reasoning applies in the other direction.
+
 **Why the two are not the same case — which is the entire reason this entry exists.** They
 look identical: both are settings, both are silently overwritten on the same edge, by the same
 firmware, in the same record. The symmetry is misleading.
