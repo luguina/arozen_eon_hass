@@ -24,6 +24,11 @@ _LOGGER = logging.getLogger(__name__)
 # settable work/pause pair - the pause seconds (DP 106) are a read-only mirror, exposed as
 # an attribute on the intensity select, and the burst length (DP 105) is fixed at 30 s.
 #
+# SWITCH carries the two written DPs: power (DP 2) and the frontal LED (DP 7). On this device
+# "writable" is a measured property rather than an obvious one - DP 103 accepts writes and
+# reverts them - so DP 7 got an entity only after a write test held for 30 s in both
+# directions (#15).
+#
 # BINARY_SENSOR carries two entities, "Misting" (DP 103) and "Charging" (DP 102). Misting is
 # a platform rather than an attribute on the switch because it is a genuinely separate state:
 # the switch says whether the duty cycle is running, this says whether the nozzle is open

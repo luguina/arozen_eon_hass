@@ -108,6 +108,32 @@ COUNTDOWN_LABELS: Final = {
 #: "untime", so treat DP 4 as the request and DP 5 as what the device actually armed.
 DP_COUNTDOWN_REMAINING: Final[int | None] = 5
 
+#: The frontal LED, a bool. **Write-verified both ways 2026-08-22** ✅: false -> true was
+#: accepted and still true across five reads over 30 s, and true -> false the same. That
+#: duration is the point, not the acceptance - DP_MISTING is the standing lesson that a Tuya
+#: device will acknowledge a write and then quietly reassert its own value, and 30 s spans a
+#: full DP_WORK_S burst, which is the window in which 103 does exactly that.
+#:
+#: Identified 2026-08-21 (night) by toggling it in the app: it moved within one poll, both
+#: directions, twice. It read ``false`` through the whole earlier remote walk for the dullest
+#: possible reason - the LED was off. Worth remembering when a DP "never moves": the stimulus
+#: may simply have been switched off.
+#:
+#: ⚠️ **The device also moves this one itself, and the rule is not established.** Two power
+#: cycles carried it down with DP_POWER and back up on the next on; a third moved DP 2 alone
+#: and left it untouched. Both self-moving episodes happened while charging, and plugging the
+#: charger in had itself produced four transitions in ~40 s. "Follows power" fits two
+#: observations out of three, which is not a rule, and nothing here is built as though it
+#: were. The write test above ran with the charger connected and DP 7 did **not** drift, so
+#: the charger's transitions belong to the plug-in event rather than to being on the cable.
+#:
+#: The integration therefore reads this DP rather than owning it: switch.py writes when asked
+#: and otherwise reports whatever the device says, with no memory and no restore. That is the
+#: deliberate opposite of DP_INTENSITY, and ADR-006 has the reasoning - a value the firmware
+#: *resets* is a defect worth correcting; a value the firmware *moves for its own reasons we
+#: have not established* is not something to fight.
+DP_LED: Final[int | None] = 7
+
 #: Battery percent. Rose to 100 while plugged in, then fell ~1%/minute while running -
 #: including through pause phases, which is discharge rather than consumption ✅.
 DP_BATTERY: Final[int | None] = 101

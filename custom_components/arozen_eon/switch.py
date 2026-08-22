@@ -1,4 +1,8 @@
-"""Power switch for the Arozen EON Pro 2.
+"""The two things on this device that are written rather than read: power, and the LED.
+
+Power is DP 2 and the LED is DP 7. Both are **command DPs**, and on this device that word
+has to be earned by a write test rather than inferred from a DP moving when you press
+something — see below, and see ``ArozenLedSwitch`` for how DP 7 earned it.
 
 Power is DP 2, a plain bool, write-verified both ways on the device 2026-08-21: ``True``
 starts it misting within ~2 s, ``False`` stops it.
@@ -72,10 +76,28 @@ async def async_setup_entry(
     entry: ArozenConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
+    # The two switches below repeat is_on / turn_on / turn_off / _async_set almost verbatim,
+    # and that is deliberate for now rather than unnoticed. select.py factors a base class at
+    # two entities, so "only two, leave it" is not this repo's rule - the difference is what
+    # is shared. ArozenDpSelect holds a *contract*: a label<->value map read in both
+    # directions, and the rule that an unrecognised device value reads as unknown. Duplicating
+    # that risks the two selects drifting apart on the contract. These switches share
+    # *mechanics*: read a bool, write a bool, wrap the error. Nothing there can drift silently,
+    # and the cross-write tests pin the wiring.
+    #
+    # What would justify the base: a third command DP, or wanting "non-optimistic" stated once
+    # instead of twice - it is load-bearing for the LED (see below) and currently relies on
+    # both classes independently continuing to read their DP.
+    entities: list[SwitchEntity] = []
     if dp.DP_POWER is None:
-        _LOGGER.warning("power is unmapped in dp.py — no switch entity until the DP dump")
-        return
-    async_add_entities([ArozenPowerSwitch(entry.runtime_data)])
+        _LOGGER.warning("power is unmapped in dp.py — no power switch until the DP dump")
+    else:
+        entities.append(ArozenPowerSwitch(entry.runtime_data))
+    if dp.DP_LED is None:
+        _LOGGER.warning("the LED is unmapped in dp.py — no LED switch")
+    else:
+        entities.append(ArozenLedSwitch(entry.runtime_data))
+    async_add_entities(entities)
 
 
 class ArozenPowerSwitch(ArozenEntity, SwitchEntity):
@@ -114,4 +136,78 @@ class ArozenPowerSwitch(ArozenEntity, SwitchEntity):
         except ArozenError as err:
             raise HomeAssistantError(
                 f"Failed to turn the Arozen EON Pro 2 {'on' if value else 'off'}: {err}"
+            ) from err
+
+
+class ArozenLedSwitch(ArozenEntity, SwitchEntity):
+    """The frontal LED (DP 7). A command DP — and that was measured, not assumed.
+
+    **Why this is a switch and not a read-only sensor.** DP 103 is the standing warning that
+    this device will acknowledge a write and then reassert its own value, which is how the
+    valve state was mistaken for the power control. So the LED was not given an entity until
+    someone wrote to it: on 2026-08-22 both directions were accepted *and still held five
+    reads later, 30 s on*. Thirty seconds is chosen rather than incidental — it spans a full
+    DP_WORK_S burst, which is the window in which DP 103 does its reverting. Had it snapped
+    back, this would have shipped as a `binary_sensor` and the revert would have been
+    documented rather than fought.
+
+    **The integration does not own this value, and that is deliberate.** The device moves DP 7
+    by itself: two power cycles out of three took it down with the power and brought it back
+    up, and plugging in the charger produced four transitions in about forty seconds. The
+    condition has *not* been established — "follows power" fits two observations out of three
+    — so this entity reports what the device says and never argues with it.
+
+    In particular there is **no memory and no restore here**, which is the opposite of what
+    the intensity select gets, and the asymmetry is the point. Intensity is *reset* by the
+    firmware on a known edge, destroying a choice the user made; that is a defect, and
+    ADR-006 is why correcting it is legitimate. The LED moving is not a defect we can
+    demonstrate — it may well be intended behaviour tied to charging — and writing state back
+    at a device over a rule that fits two thirds of the evidence would be inventing a
+    correction rather than making one.
+
+    **Not optimistic.** ``is_on`` reads the DP. If a write ever stops sticking, the entity
+    shows what the device reports, which is the honest answer and the one that gets noticed;
+    an optimistic switch would paper over exactly the failure mode this entity was gated on.
+    """
+
+    _attr_name = "LED"
+
+    def __init__(self, coordinator: ArozenCoordinator) -> None:
+        super().__init__(coordinator, "led")
+
+    @property
+    def icon(self) -> str:
+        """Named for the state it is showing, unlike the static icons elsewhere here.
+
+        The rest of the integration sets ``_attr_icon`` once, which is fine when the icon
+        names a *thing* — a scent, a timer, a humidifier. These ones name a *state*, so a
+        static ``mdi:led-on`` sitting next to a switch that reads off would be a small lie.
+        Unknown gets its own outline rather than being drawn as off, for the same reason
+        ``is_on`` returns None rather than False.
+        """
+        if self.is_on is None:
+            return "mdi:led-outline"
+        return "mdi:led-on" if self.is_on else "mdi:led-off"
+
+    @property
+    def is_on(self) -> bool | None:
+        """Whether the frontal LED is lit. None until the first successful read."""
+        if self.coordinator.data is None:
+            return None
+        value = dp.get(self.coordinator.data, dp.DP_LED)
+        return None if value is None else bool(value)
+
+    async def async_turn_on(self, **kwargs) -> None:
+        await self._async_set(True)
+
+    async def async_turn_off(self, **kwargs) -> None:
+        await self._async_set(False)
+
+    async def _async_set(self, value: bool) -> None:
+        assert dp.DP_LED is not None  # the entity is not created otherwise
+        try:
+            await self.coordinator.async_set_dp(dp.DP_LED, value)
+        except ArozenError as err:
+            raise HomeAssistantError(
+                f"Failed to turn the Arozen EON Pro 2 LED {'on' if value else 'off'}: {err}"
             ) from err

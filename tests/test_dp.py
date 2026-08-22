@@ -72,6 +72,10 @@ def test_current_observed_map():
     assert dp.DP_COUNTDOWN == 4
     assert dp.DP_COUNTDOWN_REMAINING == 5
     assert dp.DP_BATTERY == 101
+    # The LED, write-verified both ways 2026-08-22 and held for 30 s each way. It is a
+    # command DP, which on this device is a measured claim - DP 103 accepts writes and
+    # reverts them, which is why the entity waited for the test.
+    assert dp.DP_LED == 7
     # Charging, and the three pinyin-initial values observed on the cable. The entity checks
     # membership in this map before deciding on/off, so a typo would not raise - it would
     # silently turn a real state into "unknown".

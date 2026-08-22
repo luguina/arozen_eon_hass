@@ -16,11 +16,12 @@ creates nothing. The datapoints are there; they just had to be found by hand.
 
 ## What you get
 
-Ten entities, on one device:
+Eleven entities, on one device:
 
 | Entity | What it is |
 |---|---|
 | `switch.arozen_eon_pro_2` | **Power.** On means the duty cycle is running — not that it is misting this second |
+| `switch.arozen_eon_pro_2_led` | **Frontal LED.** Writable — verified on the device, and it sticks. The diffuser also moves this one itself on some power cycles; the integration reports that rather than fighting it |
 | `binary_sensor.arozen_eon_pro_2_misting` | **Misting.** Whether the nozzle is open *right now*. On for 30 s, then off for the interval |
 | `binary_sensor.arozen_eon_pro_2_charging` | **Charging.** On while the battery is taking charge. The device reports three states and this class holds two, so `charge_state` in the attributes carries all three — including `complete` — see gotcha 5 |
 | `select.arozen_eon_pro_2_intensity` | **Intensity**, `L1 · every 1 min` … `L6 · every 40 min` |
@@ -189,15 +190,15 @@ capture-specific rules are in [docs/captures/README.md](docs/captures/README.md#
 
 | | |
 |---|---|
-| ✅ | Power, intensity, timer, battery, nozzle state, charging — all mapped, write-verified against the device where writing is meaningful, and covered by tests |
+| ✅ | Power, intensity, timer, battery, nozzle state, charging, LED — all mapped, write-verified against the device where writing is meaningful, and covered by tests |
 | ✅ | Config flow, options flow and all nine entities *as they stood on 2026-08-21* verified end to end against a real Home Assistant instance and the real diffuser |
 | ✅ | **What the phone app's power-off does that ours does not: nothing.** [#5](https://github.com/luguina/arozen_ha_controller/issues/5)'s remote walk settled it and overturned the premise — the reset belongs to the power-**on** edge, and the app loses intensity exactly like we do. Gotcha #2 above is the corrected version |
 | ✅ | **Intensity survives a power cycle** ([#14](https://github.com/luguina/arozen_ha_controller/issues/14)) — remembered from ordinary polling, written back on the on edge from any source, and never taught the firmware's default *by* the reading that carries the reset — which is what would otherwise restore L1 for ever. A power-on that reports some *other* level means a human got there first, and that one does teach. The countdown is armed on the same edge and is deliberately left alone ([ADR-006](docs/decisions.md#adr-006--correct-the-power-on-intensity-reset-and-only-that-one)) |
 | ✅ | **The restore is verified on the real diffuser** (2026-08-21), from both directions: Home Assistant's own switch, where L4 was back before the turn-on call returned, and the **physical remote**, where it came back on the following poll. The guard holds too — switch on with the remote and press intensity, and the level you chose survives untouched. Fifteen checks, two restores, no failures. The restore *counter* is what proves the firmware did reset it, because a restore only fires when the device reports L1 on the on edge |
 | ✅ | The **entity wiring** is verified too, in a throwaway Home Assistant driven over its own REST API: the config flow validates and creates the entry, exactly the nine entities that existed then appear — the ten listed above, less `charging`, which postdates that run — and nothing else, and after `switch.turn_off` / `switch.turn_on` the intensity select still reads `L4 · every 10 min` with the restores sensor at 1 and `remembered_level: L4` |
 | ✅ | **DP 102 is charging status** (`zzcd`/`wcd`/`cdwc` — 正在充电 / 未充电 / 充电完成) and is now the tenth entity ([#16](https://github.com/luguina/arozen_ha_controller/issues/16)). It was never reachable by pressing buttons — the stimulus is a cable, not a control — which is why an entire remote walk went past it. `cdwc` was confirmed on the device 2026-08-22, on the cable at 100 % |
-| ⏸️ | **The charging entity has not been through `tools/verify_ha.py`.** It has unit tests, and the DP itself is well attested, but that harness power-cycles the real diffuser and the run is a deliberate act rather than something to do in passing. The expectation once it runs is 22/22 |
-| ⏸️ | **DP 7 is the frontal LED**, and it is *not* an entity yet ([#15](https://github.com/luguina/arozen_ha_controller/issues/15)). Everything known about it is observation: the app moves it, and it has also moved on its own — on two power cycles out of three, both while the device was on the charger, which is not enough to call a rule. **It has never been written**, and whether it is a command DP or a status DP decides whether it becomes a switch or a read-only binary sensor. DP 103 is why that measurement comes first |
+| ✅ | **DP 7 is the frontal LED, and it is a command DP** ([#15](https://github.com/luguina/arozen_ha_controller/issues/15)) — write-verified 2026-08-22, both directions, each holding across five reads over 30 seconds. That duration is the test, not the acceptance: DP 103 accepts writes and then reverts them at the end of a burst, so 30 s spans the window in which a revert would have shown. Had it snapped back this would have shipped as a read-only sensor. The device also moves DP 7 by itself on some power cycles, and the integration reports that rather than fighting it — no memory, no restore, deliberately unlike intensity ([ADR-006](docs/decisions.md#adr-006--correct-the-power-on-intensity-reset-and-only-that-one)) |
+| ⏸️ | **Neither the charging sensor nor the LED switch has been through `tools/verify_ha.py`.** Both have unit tests and both DPs are well attested, but that harness power-cycles the real diffuser, so the run is a deliberate act rather than something to do in passing. The expectation once it runs is 23/23 |
 | ❓ | **DP 104** (`kk`) is the last unidentified datapoint. It has not moved through an app walk, a remote walk, an LED toggle or a charger event; a firmware constant is the leading explanation. The `datapoints_recon` diagnostic sensor watches it, and gets deleted once it is named |
 | ⏸️ | Whether the phone app has to keep working alongside Home Assistant ([ADR-004](docs/decisions.md#adr-004--pending--must-the-phone-app-keep-working)) |
 
@@ -212,7 +213,7 @@ custom_components/arozen_eon/     the integration. dp.py is the only file that k
                                   separates command datapoints from status ones, a
                                   distinction the first pass did not make and which cost
                                   it the power switch
-  switch.py                       power — DP 2, the command DP
+  switch.py                       power (DP 2) and the LED (DP 7) — the written DPs
   binary_sensor.py                "Misting" (DP 103), "Charging" (DP 102) — device-driven
   select.py                       intensity (DP 3) and countdown (DP 4)
   sensor.py                       battery, timer remaining, poll and restore

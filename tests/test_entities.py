@@ -27,7 +27,8 @@ from custom_components.arozen_eon.binary_sensor import (
     ArozenChargingBinarySensor,
     ArozenMistingBinarySensor,
 )
-from custom_components.arozen_eon.switch import ArozenPowerSwitch
+from custom_components.arozen_eon import switch as switch_module
+from custom_components.arozen_eon.switch import ArozenLedSwitch, ArozenPowerSwitch
 
 
 class FakeDevice:
@@ -50,6 +51,13 @@ class FakeCoordinator:
 
     def async_add_listener(self, *args, **kwargs):
         return lambda: None
+
+
+class FakeEntry:
+    """Just the one attribute async_setup_entry reads."""
+
+    def __init__(self, coordinator):
+        self.runtime_data = coordinator
 
 
 # -- PollHealth ---------------------------------------------------------------------------
@@ -145,6 +153,126 @@ async def test_switch_never_writes_the_valve_dp():
         coordinator = FakeCoordinator(data={"2": True, "103": "kai"})
         await getattr(ArozenPowerSwitch(coordinator), action)()
         assert all(written_dp != 103 for written_dp, _ in coordinator.writes)
+
+
+# -- LED switch ---------------------------------------------------------------------------
+#
+# DP 7, write-verified 2026-08-22. The tests that matter here are the ones pinning what this
+# entity deliberately does *not* do: it holds no state and never writes on its own.
+
+
+def test_led_is_none_before_first_read():
+    assert ArozenLedSwitch(FakeCoordinator(data=None)).is_on is None
+
+
+def test_led_reads_its_own_dp():
+    assert ArozenLedSwitch(FakeCoordinator(data={"7": True})).is_on is True
+    assert ArozenLedSwitch(FakeCoordinator(data={"7": False})).is_on is False
+
+
+def test_led_is_none_when_its_dp_is_absent():
+    # A payload without DP 7 is unknown, not off.
+    assert ArozenLedSwitch(FakeCoordinator(data={"2": True})).is_on is None
+
+
+async def test_led_writes_its_own_dp():
+    coordinator = FakeCoordinator(data={"7": False})
+    await ArozenLedSwitch(coordinator).async_turn_on()
+    assert coordinator.writes == [(7, True)]
+
+    coordinator = FakeCoordinator(data={"7": True})
+    await ArozenLedSwitch(coordinator).async_turn_off()
+    assert coordinator.writes == [(7, False)]
+
+
+async def test_led_only_writes_its_own_dp():
+    # The two switches share a platform and a shape; they must not share a DP. The assertion
+    # is the strong one - every write is DP 7 - rather than merely "not DP 2", because a
+    # switch that wrote some third DP would pass the weaker form.
+    for action in ("async_turn_on", "async_turn_off"):
+        coordinator = FakeCoordinator(data={"2": True, "7": True})
+        await getattr(ArozenLedSwitch(coordinator), action)()
+        assert all(written_dp == 7 for written_dp, _ in coordinator.writes)
+
+
+async def test_power_switch_only_writes_its_own_dp():
+    # And the other direction, equally strong: every write is DP 2.
+    for action in ("async_turn_on", "async_turn_off"):
+        coordinator = FakeCoordinator(data={"2": True, "7": True})
+        await getattr(ArozenPowerSwitch(coordinator), action)()
+        assert all(written_dp == 2 for written_dp, _ in coordinator.writes)
+
+
+def test_led_icon_follows_the_state_including_unknown():
+    # The icon names a state rather than a thing, so a static one would be wrong half the
+    # time. Unknown gets its own outline rather than being drawn as off, matching is_on.
+    assert ArozenLedSwitch(FakeCoordinator(data={"7": True})).icon == "mdi:led-on"
+    assert ArozenLedSwitch(FakeCoordinator(data={"7": False})).icon == "mdi:led-off"
+    assert ArozenLedSwitch(FakeCoordinator(data=None)).icon == "mdi:led-outline"
+    assert ArozenLedSwitch(FakeCoordinator(data={"2": True})).icon == "mdi:led-outline"
+
+
+def test_led_is_not_optimistic():
+    """The device's report wins, always — the guard against papering over a revert.
+
+    DP 7 was only given a switch because a write test held for 30 s; DP 103 is the standing
+    example of a DP that accepts a write and then reverts. If DP 7 ever starts behaving that
+    way, this entity must show the device's value rather than the value we asked for, because
+    that is the reading that gets the problem noticed.
+    """
+    reverted = FakeCoordinator(data={"7": False})
+    assert ArozenLedSwitch(reverted).is_on is False
+
+
+async def test_led_write_leaves_no_state_behind_to_reassert():
+    """No memory, no restore — the deliberate opposite of the intensity select (ADR-006).
+
+    The device moves DP 7 on its own, on a condition that is not established ("follows power"
+    fits two power cycles out of three). An entity that remembered what it last wrote and put
+    it back would be enforcing a rule the evidence does not support. So a write is a write and
+    nothing is retained: the only writes this entity ever makes are the ones it is asked for.
+    """
+    coordinator = FakeCoordinator(data={"7": False})
+    led = ArozenLedSwitch(coordinator)
+    await led.async_turn_on()
+    assert coordinator.writes == [(7, True)]
+
+    # The device comes back reporting the opposite of what was just written. The entity
+    # reports that, and issues no correcting write.
+    coordinator.data = {"7": False}
+    assert led.is_on is False
+    assert coordinator.writes == [(7, True)]
+
+
+# -- The switch platform's setup ------------------------------------------------------------
+
+
+async def _setup_switches(monkeypatch, **unmapped):
+    for name, value in unmapped.items():
+        monkeypatch.setattr(switch_module.dp, name, value)
+    added = []
+    await switch_module.async_setup_entry(
+        None, FakeEntry(FakeCoordinator(data={})), added.extend
+    )
+    return [type(entity).__name__ for entity in added]
+
+
+async def test_setup_adds_both_switches(monkeypatch):
+    assert await _setup_switches(monkeypatch) == ["ArozenPowerSwitch", "ArozenLedSwitch"]
+
+
+async def test_setup_without_power_still_adds_the_led(monkeypatch):
+    """The regression this guards, and it was a live one.
+
+    Before #15 this platform returned early when DP_POWER was unmapped, which was right when
+    power was the only switch here. Adding the LED under that early return would have made an
+    unmapped power DP silently cost the LED entity too.
+    """
+    assert await _setup_switches(monkeypatch, DP_POWER=None) == ["ArozenLedSwitch"]
+
+
+async def test_setup_without_the_led_still_adds_power(monkeypatch):
+    assert await _setup_switches(monkeypatch, DP_LED=None) == ["ArozenPowerSwitch"]
 
 
 # -- Misting binary sensor ----------------------------------------------------------------
@@ -285,13 +413,6 @@ def test_charging_reads_none_for_scalar_values_that_are_not_states():
 # exactly the kind of edit that silently drops the *other* entity. Nothing else in the test
 # suite would notice: every other entity test constructs its class directly. The live check
 # that would have caught it, tools/verify_ha.py, needs the real diffuser and a power cycle.
-
-
-class FakeEntry:
-    """Just the one attribute async_setup_entry reads."""
-
-    def __init__(self, coordinator):
-        self.runtime_data = coordinator
 
 
 async def _setup_binary_sensors(monkeypatch, **unmapped):
