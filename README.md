@@ -58,23 +58,90 @@ directory and restart.
 Four fields, and the form proves them before it accepts them — it opens a real connection and
 reads status, so a wrong key or version fails here rather than silently later.
 
-| Field | Where it comes from |
+| Field | What it is |
 |---|---|
-| **IP address** | Your router's client list, or `python -m tinytuya scan`. Give the diffuser a DHCP reservation — the config entry stores an address, not a name |
-| **Device ID** | The QR login or `tinytuya wizard` |
-| **Local key** | Same. ⚠️ This is a **live credential** — see [below](#about-the-local_key) |
-| **Protocol version** | `3.5` for this unit. `tinytuya scan` reports it |
+| **IP address** | Where the diffuser sits on your LAN |
+| **Device ID** | Its permanent identity in Tuya's world — 22 characters, starting `bf` |
+| **Local key** | The secret the firmware accepts commands under. ⚠️ A **live credential** — see [below](#about-the-local_key) |
+| **Protocol version** | Which dialect the firmware speaks. `3.3`, `3.4` or `3.5` — **`3.5` for this unit**, and the default the form offers |
 
-Two ways to get the device ID and local key:
+### Where the device ID and local key come from
 
-- **[`tuya-local-key`](https://github.com/vineetchoudhary/tuya-local-key)** — QR login against
-  Tuya's device-sharing SDK, and **no Tuya IoT developer account needed**, which removes what
-  used to be the worst part of this job. Runs as a CLI, a Docker container or a Home Assistant
-  add-on. QR codes expire in a minute or two, so have the phone open before you start.
-- **`tinytuya wizard`** — the classic route, and the one that *does* want a Tuya IoT platform
-  project with an Access ID and Secret. The trial expires and needs periodic renewal.
+**This is the hard part, and it is hard on purpose.** The diffuser is sold as a cloud
+appliance: you pair it to a Tuya account with the Smart Life app, and from then on the app
+talks to Tuya's servers and Tuya's servers talk to the device. The `local_key` is what lets
+you skip that round trip and address the device directly on your own network — and nothing in
+the product wants you to have it. It is **not printed on the device**, **not shown anywhere in
+the app**, and **not readable from the device itself**. It is minted when the device is paired,
+and it only ever leaves Tuya through Tuya's own APIs.
 
-Detail and gotchas: [datapoints.md §Method](docs/datapoints.md#1-get-the-credentials).
+So every route below is the same manoeuvre: authenticate as yourself, ask Tuya which devices
+are on your account, and read the key out of the reply. **The diffuser has to be paired in the
+Smart Life / Tuya app first** — if it is not in the app, there is nothing for either tool to
+read.
+
+**Route A — [`tuya-local-key`](https://github.com/vineetchoudhary/tuya-local-key). Start here.**
+A QR login against Tuya's device-sharing SDK, and **no Tuya IoT developer account needed**,
+which removes what used to be the worst part of this job. It runs as a CLI, a Docker container
+or a Home Assistant add-on, and prints device ID, `local_key`, IP, online status and category
+for every device on the account.
+
+One trap, and it catches most people once: **the QR code expires in a minute or two.** Have the
+phone unlocked with the Smart Life app already open on its scanner *before* you generate it.
+
+**Route B — `tinytuya wizard`. The classic route, and heavier.**
+
+```sh
+pip install tinytuya
+python -m tinytuya wizard
+```
+
+This one *does* want a **Tuya IoT Platform** project with an Access ID and Secret, and inside
+that project you must also "Link Tuya App Account" so the project can see devices you paired in
+the app. The trial expires and needs periodic renewal — that lapsing is the usual reason a setup
+that worked once cannot be reproduced six months later. Note where it puts its output:
+`devices.json`, `tinytuya.json` and `snapshot.json`, in the working directory, **each containing
+live keys in plaintext**.
+
+### Finding the IP, and confirming the protocol version
+
+```sh
+python -m tinytuya scan
+```
+
+It broadcasts on the LAN and reports every Tuya device that answers, with its address **and the
+protocol version that device is speaking** — which is the only honest way to fill the fourth
+field. `3.5` is what this unit reports; `3.3` and `3.4` stay selectable because a firmware
+update can move it.
+
+**A wrong protocol version does not present as a wrong protocol version.** The connection opens,
+the reply comes back undecryptable, and the form reports it the way it reports a bad key. So if
+setup rejects credentials you are confident in, change the version before you start doubting the
+key.
+
+### The order that works
+
+1. Pair the diffuser in the Smart Life app, if it is not already
+2. Route A or Route B → **device ID** and **local key**
+3. `python -m tinytuya scan` → **IP address** and **protocol version**
+4. **Close the Smart Life app.** During recon, local *writes* failed intermittently while it was
+   open and landed reliably once it was closed. This form only *reads*, so it may well survive an
+   open app — but closing it costs nothing, and a contended connection here would look like bad
+   credentials rather than like contention, which is the expensive kind of wrong turn
+5. Fill the form and submit — it validates against the real device, so success here means it
+   genuinely works
+6. Give the diffuser a **DHCP reservation** in your router. The config entry stores an address,
+   not a name, and a lease change is a silent break
+7. Put the `local_key` in your password manager, and nowhere else
+
+### Re-pairing the diffuser invalidates the key
+
+Removing the device from the app and adding it back **mints a new `local_key`**. The device ID
+survives; the key does not. Home Assistant will then fail every poll, with the reason on
+`sensor.…_failed_polls`. The fix is to reconfigure the entry with the new key — and that same
+property is the remedy if you ever leak one, which is worth knowing before you need it.
+
+Recon-level detail on all of the above: [datapoints.md §Method](docs/datapoints.md#1-get-the-credentials).
 
 ## Before you automate it
 
