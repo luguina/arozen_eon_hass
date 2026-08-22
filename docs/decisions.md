@@ -237,10 +237,80 @@ sufficient and the scope narrows to Home-Assistant-initiated power-ons only.
 
 ---
 
+## ADR-007 — Rewrite the history to remove the device IDs, and record why that is not obvious
+
+**Status:** accepted · **Date:** 2026-08-22 · **Execution:** the tree half is done
+([#20](https://github.com/luguina/arozen_ha_controller/issues/20)); the rewrite itself is a
+force-push and has not run yet
+
+**Context.** An audit on 2026-08-22 found the repo breaking its own redaction rule
+([captures/README.md](captures/README.md#redaction-rule)), which grants each identifier **one**
+authoritative location. Three device IDs were in the tracked tree: this diffuser's, restated a
+second time in `datapoints.md`, and two belonging to *other* appliances on the same Tuya account,
+which had no sanctioned location at all. All three are also in **every commit back to the initial
+one**, so fixing the tree leaves the values one `git log -p` away.
+
+The good news bounds the problem: the `local_key` — the thing that actually grants control — has
+**never** been committed, on any ref. `git log -S` returns nothing. This entry is about
+identifiers only.
+
+**The argument for doing nothing, because it is a real one and should not be re-made from
+scratch.** A Tuya device ID is an *address, not a credential*. Holding it grants nothing: local
+control needs the `local_key`, which is clean, and re-pairing regenerates that key while the ID
+survives. The repo is private, and the exposure is a household-inventory disclosure to whoever
+can already read it. On those grounds "note it and move on" is defensible.
+
+**Decision.** Rewrite anyway, with `git filter-repo`, and force-push. Three things outweigh the
+above:
+
+1. **The repo states the rule and does not follow it.** A stated-but-broken rule is worse than no
+   rule, because it is the thing a reader trusts instead of checking. The same reasoning already
+   produced commit `bf00046`, which wrote the violation down rather than glossing it.
+2. **The severity is conditional on a future event, and the fix is not.** Device ID alone is
+   nothing; device ID *plus* a later `local_key` slip is control of an appliance in the house. The
+   ID is the half that is already permanent, and removing it now means a future slip is one
+   mistake instead of two.
+3. **It will never be cheaper.** 41 commits, one branch, no forks, no stars, essentially one other
+   clone. Going public or adding a collaborator is precisely what converts this from an afternoon
+   into a thing you cannot do. The publication gate below now depends on it, so the alternative is
+   not "later" but "before publishing", by which time the cost may have moved.
+
+**What the rewrite costs, stated so nobody is surprised by it.** Every commit SHA changes, so the
+SHAs quoted in merged PRs #22–#24 and in prose (`bf00046`, `9bb18c7`, `992ce57`) stop resolving;
+the diffs survive on `main`, the links do not. Any other clone is left on a divergent history and
+must reset or re-clone rather than pull. And the author-email metadata question is *not* settled
+here — a personal address is in the commit metadata of most commits, which is the project owner's call and a
+separate one.
+
+**⚠️ And what it does not buy, measured 2026-08-22 rather than assumed.** GitHub keeps a
+`refs/pull/N/head` ref for every pull request, permanently, and **a force-push to `main` does not
+touch them**. Fetching `+refs/pull/*/head` from this repo returns **13 refs, and the device id is
+in `docs/datapoints.md` and `docs/research/dossier.md` under every one of them.** There is no API
+to delete a pull ref. So a rewrite makes `main` clean — which is what a fresh clone, a `git log -p`
+and the release tarball all see — and leaves the values fetchable by anyone with repo access who
+knows the incantation. That is a smaller audience than "anyone who clones", and it is not zero.
+
+The only ways to close that remainder are to **delete and recreate the repository**, or to push the
+scrubbed history to a **new** repository and keep this one private as the archive. Both cost the
+entire PR and issue record, or split it from the code. Neither is proposed here: the record *is*
+the point of this workflow. Recorded so the gap is a known one rather than a surprise found later.
+
+**Where this actually bites is the publication gate**, and only there. While the repo is private,
+pull refs are visible to whoever can already read every file anyway. Making it public makes them
+public too. So the gate below should be read as: a rewrite satisfies it for the code, and going
+public with the PR history attached needs this paragraph re-read first.
+
+**What would change this.** If the rewrite is ever attempted and turns out to be destructive in a
+way the plan did not anticipate, the fallback is the tree-only fix already made plus a note here
+saying history was left alone deliberately — which is a defensible end state, not a failure, for
+the reasons in the "do nothing" paragraph.
+
+---
+
 ## Pending
 
 | # | Decision | Blocked on |
 |---|---|---|
 | [ADR-004](#adr-004--pending--must-the-phone-app-keep-working) | Must the phone app keep working? | The project owner, informed by a coexistence measurement — now half-made: with the app open, local writes failed intermittently (null/914); with it closed, they landed (dossier §6.3) |
 | ~~On-device schedules vs Home Assistant automations~~ | **Resolved 2026-08-21 by evidence:** the app's schedule moved no DP during the control walk — scheduling is cloud/app-side, so HA automations + the countdown DP (dossier §6.6) |
-| — | Whether to make this repo public | Confirming no `local_key` has ever been committed |
+| — | Whether to make this repo public | Two conditions, not one. (a) Confirming no `local_key` has ever been committed — ✅ clean, tree and history, audited 2026-08-22. (b) The one-authoritative-location rule in [captures/README.md](captures/README.md#redaction-rule) actually holding, in the tree **and** in history — the tree is done, the history rewrite ([ADR-007](#adr-007--rewrite-the-history-to-remove-the-device-ids-and-record-why-that-is-not-obvious)) is not. The gate named only (a) until [#20](https://github.com/luguina/arozen_ha_controller/issues/20), which meant the repo could satisfy its own precondition with the `device_id` rule broken |
