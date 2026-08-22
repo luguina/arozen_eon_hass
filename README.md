@@ -183,8 +183,8 @@ git ls-files -z | xargs -0 grep -niE \
 It reports **candidates for a human to look at**, not confirmed leaks. A false positive costs a
 glance; a false negative publishes a working credential to the device in your house. Deliberately
 noisy, then — but it is worth knowing *how* noisy before you skim it, because a rate you have not
-measured is one you assume is low. As of 2026-08-22 it returns **70 lines, 6 of which are
-identifiers**: the one sanctioned entry in dossier §6.2, and five synthetic ids in the two test
+measured is one you assume is low. On the tree as this was written it returns **70 lines, 6 of
+which are identifiers**: the one sanctioned entry in dossier §6.2, and five synthetic ids in the two test
 files that need identifier-shaped strings to test redaction with. The other 64 are the *word*
 `local_key`, in code that reads a credential out of an untracked file rather than containing one.
 So about one line in twelve is an identifier, and they do not look different from the rest — read
@@ -202,12 +202,16 @@ git grep -nIE 'bf[0-9a-z]{20}|"(local_)?key"' $(git rev-list --all) \
   | sed 's/^[0-9a-f]\{40\}://' | sort -u
 ```
 
-Narrower than the tree sweep on purpose. The broad regex over 41 commits returns several hundred
-lines that are mostly the same file forty times, and a report that long gets skimmed rather than
-read; dropping the commit SHA and deduping collapses one leak in thirty commits down to one line —
-**31 deduplicated lines against 653 raw**, on the history as it stood on 2026-08-22 and before
-the [ADR-007](docs/decisions.md#adr-007--rewrite-the-history-to-remove-the-device-ids-and-record-why-that-is-not-obvious)
-rewrite runs. It answers *"was this ever committed"*, not *"in which commits"*; `git log -S<value>
+Narrower than the tree sweep on purpose. The broad regex over forty-odd commits returns several
+hundred lines that are mostly the same file forty times, and a report that long gets skimmed rather
+than read; dropping the commit SHA and deduping collapses one leak in thirty commits down to one
+line, which is the difference between **a few dozen lines and several hundred** — small enough to
+read, which is the whole trick.
+
+No exact figure is quoted for it on purpose. Both counts move with **every commit**, including the
+one that adds a line above a hit and thereby mints a fresh `path:line` entry under dedup — so a
+number written down here is stale by the time the change that measured it merges. That is not a
+reason to distrust the command; it is the reason it is a command. Run it. It answers *"was this ever committed"*, not *"in which commits"*; `git log -S<value>
 --all` is the follow-up once you know there is something to chase.
 
 The two halves of that pattern do different jobs, and the second one has never fired in anger. A

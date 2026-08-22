@@ -270,7 +270,7 @@ above:
    nothing; device ID *plus* a later `local_key` slip is control of an appliance in the house. The
    ID is the half that is already permanent, and removing it now means a future slip is one
    mistake instead of two.
-3. **It will never be cheaper.** 41 commits, one branch, no forks, no stars, essentially one other
+3. **It will never be cheaper.** Forty-odd commits, one branch, no forks, no stars, essentially one other
    clone. Going public or adding a collaborator is precisely what converts this from an afternoon
    into a thing you cannot do. The publication gate below now depends on it, so the alternative is
    not "later" but "before publishing", by which time the cost may have moved.
@@ -284,9 +284,15 @@ separate one.
 
 **⚠️ And what it does not buy, measured 2026-08-22 rather than assumed.** GitHub keeps a
 `refs/pull/N/head` ref for every pull request, permanently, and **a force-push to `main` does not
-touch them**. Fetching `+refs/pull/*/head` from this repo returns **13 refs, and the device id is
-in `docs/datapoints.md` and `docs/research/dossier.md` under every one of them.** There is no API
-to delete a pull ref. So a rewrite makes `main` clean — which is what a fresh clone, a `git log -p`
+touch them**. Fetching `+refs/pull/*/head` from this repo returns a ref per pull request ever
+opened — **fourteen of them at the time of writing, and the device id is in `docs/datapoints.md`
+and `docs/research/dossier.md` under every single one.** There is no API to delete a pull ref.
+
+And the count is not static, which is the part that turns a footnote into an argument: **it grows
+by one every time a pull request is opened, including the one that carried this entry into the
+repo.** Every PR raised between now and a rewrite pins another copy of the pre-rewrite history
+server-side. So the remainder a rewrite leaves behind does not sit still waiting to be cleaned up
+later — it accretes, and it accretes fastest while the workflow is being used properly. So a rewrite makes `main` clean — which is what a fresh clone, a `git log -p`
 and the release tarball all see — and leaves the values fetchable by anyone with repo access who
 knows the incantation. That is a smaller audience than "anyone who clones", and it is not zero.
 
