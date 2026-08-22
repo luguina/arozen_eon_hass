@@ -211,8 +211,10 @@ read, which is the whole trick.
 No exact figure is quoted for it on purpose. Both counts move with **every commit**, including the
 one that adds a line above a hit and thereby mints a fresh `path:line` entry under dedup — so a
 number written down here is stale by the time the change that measured it merges. That is not a
-reason to distrust the command; it is the reason it is a command. Run it. It answers *"was this ever committed"*, not *"in which commits"*; `git log -S<value>
---all` is the follow-up once you know there is something to chase.
+reason to distrust the command; it is the reason it is a command. Run it.
+
+It answers *"was this ever committed"*, not *"in which commits"*; `git log -S<value> --all` is the
+follow-up once you know there is something to chase.
 
 The two halves of that pattern do different jobs, and the second one has never fired in anger. A
 `bf`-prefixed hit is a **Tuya device id**. A `"key"` hit has **never once matched a value** — every
@@ -242,7 +244,7 @@ remember to run any of this.
 | ⏸️ | **Neither the charging sensor nor the LED switch has been through `tools/verify_ha.py`.** Both have unit tests and both DPs are well attested, but that harness power-cycles the real diffuser, so the run is a deliberate act rather than something to do in passing. The expectation once it runs is 23/23 |
 | ❓ | **DP 104** (`kk`) is the last unidentified datapoint. It has not moved through an app walk, a remote walk, an LED toggle or a charger event; a firmware constant is the leading explanation. The `datapoints_recon` diagnostic sensor watches it, and gets deleted once it is named |
 | ⏸️ | Whether the phone app has to keep working alongside Home Assistant ([ADR-004](docs/decisions.md#adr-004--pending--must-the-phone-app-keep-working)) |
-| ⏸️ | **The repo's own redaction rule holds in the tree, and not yet in history** ([#20](https://github.com/luguina/arozen_ha_controller/issues/20)). The device id is down to one sanctioned location, two other appliances' ids are out of the dossier, and `tests/test_redaction_rule.py` fails the build on a regression. The identifiers are still in every commit back to the first, which is a force-push to fix and therefore a decision: [ADR-007](docs/decisions.md#adr-007--rewrite-the-history-to-remove-the-device-ids-and-record-why-that-is-not-obvious) takes it, and the publication gate now depends on it. The `local_key` has never been committed, on any ref — that part was audited and is clean |
+| ✅ | **The repo's own redaction rule holds in the tree, and is enforced there** ([#20](https://github.com/luguina/arozen_ha_controller/issues/20)). One device id, in dossier §6.2; two other appliances' ids out of the dossier entirely; `tests/test_redaction_rule.py` fails the build on a regression instead of waiting for somebody to run the audit sweep. The identifiers stay in **git history**, deliberately — a force-push would clean `main` and would *not* clean the `refs/pull/*/head` that GitHub keeps for every PR, so it is the expensive half of a fix that does not fix the thing it is for ([ADR-007](docs/decisions.md#adr-007--do-not-rewrite-git-history-scrub-at-publication-on-a-fresh-repository) has the measurement, and the publication route that does work). The `local_key` has never been committed, on any ref — audited, clean |
 
 The honest version, with evidence and everything still unknown, is
 [docs/datapoints.md](docs/datapoints.md).
