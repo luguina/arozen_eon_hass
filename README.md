@@ -181,8 +181,51 @@ git ls-files -z | xargs -0 grep -niE \
 ```
 
 It reports **candidates for a human to look at**, not confirmed leaks. A false positive costs a
-glance; a false negative publishes a working credential to the device in your house. The
-capture-specific rules are in [docs/captures/README.md](docs/captures/README.md#redaction-rule).
+glance; a false negative publishes a working credential to the device in your house. Deliberately
+noisy, then — but it is worth knowing *how* noisy before you skim it, because a rate you have not
+measured is one you assume is low. On the tree as this was written it returns **70 lines, 6 of
+which are identifiers**: the one sanctioned entry in dossier §6.2, and five synthetic ids in the two test
+files that need identifier-shaped strings to test redaction with. The other 64 are the *word*
+`local_key`, in code that reads a credential out of an untracked file rather than containing one.
+So about one line in twelve is an identifier, and they do not look different from the rest — read
+all 70 rather than scanning for something that jumps out.
+
+**It scans the working tree only, and that is a different question from the one you are asking.**
+A file cleaned up at the tip still carries its old contents in every commit before the cleanup, so
+this sweep can report a clean repo while the value stays one `git log -p` away. That is not
+hypothetical here — it is exactly what
+[#20](https://github.com/luguina/arozen_ha_controller/issues/20) found. The companion, over every
+blob on every ref:
+
+```sh
+git grep -nIE 'bf[0-9a-z]{20}|"(local_)?key"' $(git rev-list --all) \
+  | sed 's/^[0-9a-f]\{40\}://' | sort -u
+```
+
+Narrower than the tree sweep on purpose. The broad regex over forty-odd commits returns several
+hundred lines that are mostly the same file forty times, and a report that long gets skimmed rather
+than read; dropping the commit SHA and deduping collapses one leak in thirty commits down to one
+line, which is the difference between **a few dozen lines and several hundred** — small enough to
+read, which is the whole trick.
+
+No exact figure is quoted for it on purpose. Both counts move with **every commit**, including the
+one that adds a line above a hit and thereby mints a fresh `path:line` entry under dedup — so a
+number written down here is stale by the time the change that measured it merges. That is not a
+reason to distrust the command; it is the reason it is a command. Run it.
+
+It answers *"was this ever committed"*, not *"in which commits"*; `git log -S<value> --all` is the
+follow-up once you know there is something to chase.
+
+The two halves of that pattern do different jobs, and the second one has never fired in anger. A
+`bf`-prefixed hit is a **Tuya device id**. A `"key"` hit has **never once matched a value** — every
+one is the field name in a tool reading credentials from an untracked file. That is the point of
+including it: a hit that *was* a value would look nothing like the others, and it would mean the
+`local_key` had been committed.
+
+The capture-specific rules are in [docs/captures/README.md](docs/captures/README.md#redaction-rule),
+and `tests/test_redaction_rule.py` enforces the one-authoritative-location half of them on every
+test run — so a *third* copy of the device id fails CI, rather than waiting for somebody to
+remember to run any of this.
 
 ## Status
 
@@ -201,6 +244,7 @@ capture-specific rules are in [docs/captures/README.md](docs/captures/README.md#
 | ⏸️ | **Neither the charging sensor nor the LED switch has been through `tools/verify_ha.py`.** Both have unit tests and both DPs are well attested, but that harness power-cycles the real diffuser, so the run is a deliberate act rather than something to do in passing. The expectation once it runs is 23/23 |
 | ❓ | **DP 104** (`kk`) is the last unidentified datapoint. It has not moved through an app walk, a remote walk, an LED toggle or a charger event; a firmware constant is the leading explanation. The `datapoints_recon` diagnostic sensor watches it, and gets deleted once it is named |
 | ⏸️ | Whether the phone app has to keep working alongside Home Assistant ([ADR-004](docs/decisions.md#adr-004--pending--must-the-phone-app-keep-working)) |
+| ✅ | **The repo's own redaction rule holds in the tree, and is enforced there** ([#20](https://github.com/luguina/arozen_ha_controller/issues/20)). One device id, in dossier §6.2; two other appliances' ids out of the dossier entirely; `tests/test_redaction_rule.py` fails the build on a regression instead of waiting for somebody to run the audit sweep. The identifiers stay in **git history**, deliberately — a force-push would clean `main` and would *not* clean the `refs/pull/*/head` that GitHub keeps for every PR, so it is the expensive half of a fix that does not fix the thing it is for ([ADR-007](docs/decisions.md#adr-007--do-not-rewrite-git-history-scrub-at-publication-on-a-fresh-repository) has the measurement, and the publication route that does work). The `local_key` has never been committed, on any ref — audited, clean |
 
 The honest version, with evidence and everything still unknown, is
 [docs/datapoints.md](docs/datapoints.md).

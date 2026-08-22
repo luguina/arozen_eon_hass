@@ -237,10 +237,85 @@ sufficient and the scope narrows to Home-Assistant-initiated power-ons only.
 
 ---
 
+## ADR-007 — Do not rewrite git history. Scrub at publication, on a fresh repository.
+
+**Status:** accepted · **Date:** 2026-08-22
+
+**Context.** An audit that day found the repo breaking its own redaction rule
+([captures/README.md](captures/README.md#redaction-rule)), which grants each identifier **one**
+authoritative location. Three device IDs were in the tracked tree: this diffuser's, restated a
+second time in `datapoints.md`, and two belonging to *other* appliances on the same Tuya account,
+which had no sanctioned location at all. All three are also in **every commit back to the initial
+one**, so fixing the tree leaves the values one `git log -p` away — which is why the history is a
+decision rather than a chore.
+
+The good news bounds the problem. The `local_key` — the thing that actually grants control — has
+**never** been committed, on any ref; `git log -S` returns nothing. This entry is about identifiers
+only, and a Tuya device ID is an *address, not a credential*. Holding one grants nothing: local
+control needs the key, and re-pairing regenerates the key while the ID survives.
+
+**Decision.** Fix the tree, enforce it with a test, and **leave git history alone.** No
+`git filter-repo`, no force-push. If this repository is ever published, the scrub happens then, by
+pushing a scrubbed history to a **new** repository and keeping this one private as the archive.
+
+**This reverses a decision taken earlier the same day, and the reversal is the point of the entry.**
+The first version of ADR-007 said *rewrite now*, on the reasoning that the repo should follow the
+rule it states and that forty-odd commits with no forks would never be cheaper to rewrite. That
+reasoning rested on an assumption nobody had checked: that a force-push to `main` removes the value
+from GitHub. **It does not.**
+
+**The measurement.** GitHub keeps a `refs/pull/N/head` ref for every pull request, permanently, and
+a force-push to `main` does not touch them. Fetching `+refs/pull/*/head` from this repo returns a
+ref per pull request ever opened — **fourteen at the time of writing, and the device ID is in
+`docs/datapoints.md` and `docs/research/dossier.md` under every single one.** There is no API to
+delete a pull ref.
+
+And the count is not static, which is what turns a footnote into an argument: it grows by one every
+time a pull request is opened, **including the one that carried this entry into the repo**. So the
+remainder a rewrite leaves behind does not sit still waiting to be cleaned up later. It accretes,
+and it accretes fastest while the PR workflow is being used properly.
+
+So the rewrite would buy a clean `main` — what a fresh clone and a `git log -p` see — at the cost of
+invalidating every SHA across 25 pull requests, diverging every other clone, and installing a tool,
+while leaving the values fetchable by anyone with repo access who knows the incantation. That is the
+expensive half of a fix that does not fix the thing it is for.
+
+**The strongest case for rewriting anyway, and why it does not carry.** A clone contains `main`'s
+history but **not** the pull refs, which are not fetched by default. So against a *leaked clone* — a
+laptop, a backup, a shared machine — a rewritten repo really would be clean, and that is the most
+likely leak vector for a private repo. It does not carry because the machine that leaks a clone is
+the machine holding `.cache/creds.json`, which has the live `local_key`. The rewrite protects
+against the mild half of a failure whose severe half it cannot touch, and the severe half is
+governed by `.gitignore` and by not putting the key in the tree — which is where the effort belongs.
+
+**What is done instead, and why it is the durable part.** The tree holds exactly one device ID, in
+dossier §6.2, and `tests/test_redaction_rule.py` fails the build if a second appears — reading the
+value out of the sanctioned location rather than holding a copy, so the suite does not become the
+third occurrence. That converts the rule from prose somebody remembers into a check that runs. It is
+also the only part of this that was ever *broken* rather than merely historical.
+
+**The publication path, spelled out, because this is where it actually matters.** While the repo is
+private, pull refs are visible to whoever can already read every file anyway. Making it public makes
+them public too, so publishing *this* repository can never be clean, rewrite or no rewrite. The
+clean route is to publish a **new** repository built from a scrubbed history and keep this one
+private as the archive: the public history has no pull refs carrying anything, and the entire issue,
+PR and review record survives here. The scrub then happens once, at the moment it matters, on a
+history being rewritten anyway — where doing it now means doing it twice.
+
+**What would change this.** Deciding to publish *this* repository, PR history and all, rather than a
+fresh one — at which point the calculation changes completely and the pull refs, not `main`, become
+the problem to solve. Or a `local_key` turning up in history, which is a different severity
+altogether and would justify the rewrite plus a support request on its own. The counter-argument
+that a repo stating a rule should visibly follow it is real and is not dismissed here; it is
+outweighed by the rewrite not delivering that, and it is answered instead by the tree fix and the
+test.
+
+---
+
 ## Pending
 
 | # | Decision | Blocked on |
 |---|---|---|
 | [ADR-004](#adr-004--pending--must-the-phone-app-keep-working) | Must the phone app keep working? | The project owner, informed by a coexistence measurement — now half-made: with the app open, local writes failed intermittently (null/914); with it closed, they landed (dossier §6.3) |
 | ~~On-device schedules vs Home Assistant automations~~ | **Resolved 2026-08-21 by evidence:** the app's schedule moved no DP during the control walk — scheduling is cloud/app-side, so HA automations + the countdown DP (dossier §6.6) |
-| — | Whether to make this repo public | Confirming no `local_key` has ever been committed |
+| — | Whether to make this repo public | Two conditions, not one. (a) Confirming no `local_key` has ever been committed — ✅ clean, tree and history, audited 2026-08-22. (b) The one-authoritative-location rule in [captures/README.md](captures/README.md#redaction-rule) actually holding. ✅ in the tree, and enforced by `tests/test_redaction_rule.py`; **not** in history, and deliberately so — publishing *this* repo can never be clean, because its `refs/pull/*/head` carry the identifiers and no force-push or API call removes them ([ADR-007](#adr-007--do-not-rewrite-git-history-scrub-at-publication-on-a-fresh-repository)). The clean route is a **fresh public repository** built from a scrubbed history, with this one kept private as the archive. The gate named only (a) until [#20](https://github.com/luguina/arozen_ha_controller/issues/20), which meant the repo could satisfy its own precondition with the `device_id` rule broken |
