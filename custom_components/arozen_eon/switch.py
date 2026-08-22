@@ -76,6 +76,18 @@ async def async_setup_entry(
     entry: ArozenConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
+    # The two switches below repeat is_on / turn_on / turn_off / _async_set almost verbatim,
+    # and that is deliberate for now rather than unnoticed. select.py factors a base class at
+    # two entities, so "only two, leave it" is not this repo's rule - the difference is what
+    # is shared. ArozenDpSelect holds a *contract*: a label<->value map read in both
+    # directions, and the rule that an unrecognised device value reads as unknown. Duplicating
+    # that risks the two selects drifting apart on the contract. These switches share
+    # *mechanics*: read a bool, write a bool, wrap the error. Nothing there can drift silently,
+    # and the cross-write tests pin the wiring.
+    #
+    # What would justify the base: a third command DP, or wanting "non-optimistic" stated once
+    # instead of twice - it is load-bearing for the LED (see below) and currently relies on
+    # both classes independently continuing to read their DP.
     entities: list[SwitchEntity] = []
     if dp.DP_POWER is None:
         _LOGGER.warning("power is unmapped in dp.py — no power switch until the DP dump")
@@ -159,10 +171,23 @@ class ArozenLedSwitch(ArozenEntity, SwitchEntity):
     """
 
     _attr_name = "LED"
-    _attr_icon = "mdi:led-on"
 
     def __init__(self, coordinator: ArozenCoordinator) -> None:
         super().__init__(coordinator, "led")
+
+    @property
+    def icon(self) -> str:
+        """Named for the state it is showing, unlike the static icons elsewhere here.
+
+        The rest of the integration sets ``_attr_icon`` once, which is fine when the icon
+        names a *thing* — a scent, a timer, a humidifier. These ones name a *state*, so a
+        static ``mdi:led-on`` sitting next to a switch that reads off would be a small lie.
+        Unknown gets its own outline rather than being drawn as off, for the same reason
+        ``is_on`` returns None rather than False.
+        """
+        if self.is_on is None:
+            return "mdi:led-outline"
+        return "mdi:led-on" if self.is_on else "mdi:led-off"
 
     @property
     def is_on(self) -> bool | None:

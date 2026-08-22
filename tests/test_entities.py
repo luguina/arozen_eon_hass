@@ -185,20 +185,31 @@ async def test_led_writes_its_own_dp():
     assert coordinator.writes == [(7, False)]
 
 
-async def test_led_never_writes_the_power_dp():
-    # The two switches share a platform and a shape; they must not share a DP.
+async def test_led_only_writes_its_own_dp():
+    # The two switches share a platform and a shape; they must not share a DP. The assertion
+    # is the strong one - every write is DP 7 - rather than merely "not DP 2", because a
+    # switch that wrote some third DP would pass the weaker form.
     for action in ("async_turn_on", "async_turn_off"):
         coordinator = FakeCoordinator(data={"2": True, "7": True})
         await getattr(ArozenLedSwitch(coordinator), action)()
         assert all(written_dp == 7 for written_dp, _ in coordinator.writes)
 
 
-async def test_power_switch_never_writes_the_led_dp():
-    # And the other direction, for the same reason.
+async def test_power_switch_only_writes_its_own_dp():
+    # And the other direction, equally strong: every write is DP 2.
     for action in ("async_turn_on", "async_turn_off"):
         coordinator = FakeCoordinator(data={"2": True, "7": True})
         await getattr(ArozenPowerSwitch(coordinator), action)()
         assert all(written_dp == 2 for written_dp, _ in coordinator.writes)
+
+
+def test_led_icon_follows_the_state_including_unknown():
+    # The icon names a state rather than a thing, so a static one would be wrong half the
+    # time. Unknown gets its own outline rather than being drawn as off, matching is_on.
+    assert ArozenLedSwitch(FakeCoordinator(data={"7": True})).icon == "mdi:led-on"
+    assert ArozenLedSwitch(FakeCoordinator(data={"7": False})).icon == "mdi:led-off"
+    assert ArozenLedSwitch(FakeCoordinator(data=None)).icon == "mdi:led-outline"
+    assert ArozenLedSwitch(FakeCoordinator(data={"2": True})).icon == "mdi:led-outline"
 
 
 def test_led_is_not_optimistic():
