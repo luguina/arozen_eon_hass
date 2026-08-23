@@ -33,16 +33,17 @@ jobs:
 #
 #   Its metadata checks go through the authenticated GitHub API, but every *file content*
 #   check downloads from https://raw.githubusercontent.com/{repo}/{ref}/{path} with no
-#   credentials. This repository is private, so those URLs 404, the download returns None,
-#   and the validator reports the file as invalid. The first run failed on exactly
-#   `hacsjson` and `integration_manifest` — the two content-based checks — while every
-#   tree- and metadata-based check passed.
+#   credentials. Those URLs therefore 404 for any repository the unauthenticated fetch
+#   cannot read, the download returns None, and the validator reports as invalid a file it
+#   never saw — a property of the action, not of the repository it is aimed at. That is what
+#   the first run here hit: it failed on exactly `hacsjson` and `integration_manifest` —
+#   the two content-based checks — while every tree- and metadata-based check passed.
 #
 # Ignoring those two would have left five of seven checks suppressed: a job that validates
 # almost nothing while looking like it validates something. So the checks moved to
 # tests/test_packaging.py, which applies HACS's own schemas to the working tree — the real
-# rules, on the actual files, with no network and no dependence on the repository being
-# public. That file documents the trade.
+# rules, on the actual files, with no network and no dependence on who can read the
+# repository. That file documents the trade.
 #
-# If this repository is ever made public, restoring the job is worth it: it would then also
-# cover `brands` and `license`, which a local test cannot.
+# Restoring the job is worth it the moment those raw URLs resolve for an unauthenticated
+# client: it would then also cover `brands` and `license`, which a local test cannot.
