@@ -136,9 +136,8 @@ the reply comes back undecryptable, and the form reports it exactly the way it r
 So if setup rejects credentials you are confident in, drop to `3.4`, then `3.3`, *before* you
 start doubting the key. `3.3` and `3.4` stay selectable because a firmware update can move it.
 
-> **Keep the four values somewhere you can paste from.** A rejected attempt clears the form and
-> resets the version to `3.5` — the one field you were iterating
-> ([#32](https://github.com/luguina/arozen_ha_controller/issues/32)).
+> **A rejected attempt hands your answers back**, version included, so iterating costs one
+> dropdown change rather than a full re-entry.
 
 *If you would rather measure than guess:* `python -m tinytuya scan` broadcasts on the LAN and
 reports every Tuya device that answers, with its address **and the protocol version that device
@@ -184,10 +183,16 @@ plaintext**. Delete them when you are done.
 
 Removing the device from the app and adding it back **mints a new `local_key`**. The device ID
 survives; the key does not. Home Assistant will then fail every poll, with the reason on
-`sensor.…_failed_polls`. The fix today is to **delete the integration entry and add it again**
-with the new key — there is no in-place edit yet
-([#31](https://github.com/luguina/arozen_ha_controller/issues/31)). That same property is the
-remedy if you ever leak a key, which is worth knowing before you need it.
+`sensor.…_failed_polls`.
+
+The fix is **Settings → Devices & Services → Arozen EON Pro 2 → ⋮ → Reconfigure**, which takes a
+new IP address, local key and protocol version and tries them against the device before saving
+anything. The entry keeps its identity, so your automations and entity ids survive — which is the
+whole reason it is not "delete it and add it again". The device ID is shown but fixed: a different
+device ID is a different device, not a reconfigured one.
+
+That the key can be replaced at all is also the remedy if you ever leak one, which is worth
+knowing before you need it.
 
 Recon-level detail on all of the above: [datapoints.md §Method](docs/datapoints.md#1-get-the-credentials).
 
