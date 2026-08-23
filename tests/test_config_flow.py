@@ -25,7 +25,10 @@ import pytest
 pytest.importorskip("homeassistant", reason="config-flow tests need Home Assistant")
 
 import voluptuous as vol
+import voluptuous_serialize
 from homeassistant.const import CONF_HOST
+from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.selector import TextSelector, TextSelectorType
 
 from custom_components.arozen_eon import config_flow as config_flow_module
 from custom_components.arozen_eon.config_flow import (
@@ -173,13 +176,14 @@ async def test_rejected_attempt_carries_the_local_key_back(rejecting):
 
     Echoing a live credential is a different decision from echoing an IP address, and was
     made as one: 16 characters the owner cannot proof-read by eye, going back only to the
-    session that just typed them, into a field that is not masked on the way in either -
-    the frontend infers masking for a plain `str` from a name containing "password",
-    "secret" or "token", and `local_key` matches none. Blanking it would tax the correct
-    answer to punish nothing. Core lands the same way: 46 of its 109
-    `add_suggested_values_to_schema` sites over a secret-bearing schema pass bare
-    `user_input`; 2 strip the secret. A future reader who flips this should delete this
-    test on purpose rather than watch it fail.
+    session that just typed them. Part of the original argument was that the field was not
+    masked on the way in either, so handing it back exposed nothing new; LOCAL_KEY_SELECTOR
+    retired that leg, and the decision outlived it. What returns is now dots in the box the
+    same session just filled, and a re-typed key can no longer be checked on screen at all
+    - so blanking the field would make a typo in those 16 characters harder to catch, not
+    safer. Core lands the same way: 24 integrations in the 2026.8.1 wheel suggest bare
+    `user_input` back into a schema that masks a secret with this selector. A future reader
+    who flips this should delete this test on purpose rather than watch it fail.
     """
     fields = _rendered(await _flow().async_step_user(dict(SUBMITTED)))
 
@@ -211,6 +215,60 @@ async def test_a_retry_does_not_pollute_the_next_flow(rejecting):
 
     assert all(marker.description is None for marker in STEP_USER_SCHEMA.schema)
     assert _rendered(await _flow().async_step_user())[CONF_LOCAL_KEY]["suggested"] is None
+
+
+# -- What the box looks like --------------------------------------------------------------
+
+
+def _widget(result, name: str):
+    """The schema *value* for one field - the half that decides how it renders."""
+    return next(
+        value
+        for marker, value in result["data_schema"].schema.items()
+        if marker.schema == name
+    )
+
+
+async def test_the_local_key_is_masked():
+    """A bare `str` renders in clear text, because the frontend masks on the field *name*.
+
+    It looks for "password", "secret" or "token" in the key, and `local_key` carries none
+    of the three - so the live credential the description warns about one paragraph above
+    the field was being drawn below it in full. The selector states the intent instead of
+    hoping the name carries it.
+    """
+    field = _widget(await _flow().async_step_user(), CONF_LOCAL_KEY)
+
+    assert isinstance(field, TextSelector)
+    assert field.config["type"] == TextSelectorType.PASSWORD
+
+
+async def test_nothing_else_is_masked():
+    """The other three are not secrets, and masking them would only block proof-reading."""
+    result = await _flow().async_step_user()
+
+    assert _widget(result, CONF_HOST) is str
+    assert _widget(result, CONF_DEVICE_ID) is str
+
+
+async def test_a_suggested_local_key_survives_the_selector(rejecting):
+    """The mask and the retry prefill have to coexist, and they occupy different slots.
+
+    `add_suggested_values_to_schema` writes `suggested_value` onto the marker - the schema
+    *key* - while the selector is the *value*, so neither can overwrite the other. The
+    other tests here read the schema object, which would not notice if the two collided
+    only on the way out; this one asserts on the serialized form the websocket actually
+    sends, built the way `homeassistant.helpers.data_entry_flow` builds it.
+    """
+    result = await _flow().async_step_user(dict(SUBMITTED))
+
+    wire = voluptuous_serialize.convert(
+        result["data_schema"], custom_serializer=cv.custom_serializer
+    )
+    field = next(entry for entry in wire if entry["name"] == CONF_LOCAL_KEY)
+
+    assert field["selector"]["text"]["type"] == "password"
+    assert field["description"] == {"suggested_value": SUBMITTED[CONF_LOCAL_KEY]}
 
 
 # -- Accepted attempt ---------------------------------------------------------------------

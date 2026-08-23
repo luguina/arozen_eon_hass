@@ -34,6 +34,7 @@ import voluptuous as vol
 from homeassistant.config_entries import SOURCE_RECONFIGURE
 from homeassistant.const import CONF_HOST
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers.selector import TextSelector, TextSelectorType
 from homeassistant.helpers.typing import UNDEFINED
 
 from custom_components.arozen_eon import config_flow as config_flow_module
@@ -173,6 +174,27 @@ async def test_form_shows_the_device_id_it_will_not_let_you_change():
     result = await flow.async_step_reconfigure()
 
     assert result["description_placeholders"] == {CONF_DEVICE_ID: STORED[CONF_DEVICE_ID]}
+
+
+async def test_the_local_key_is_masked():
+    """Two schemas declare this field, so the user step being masked says nothing here.
+
+    This is the worse of the two exposures, and the reason it is pinned separately: the
+    form prefills from `entry.data`, so before the selector, merely *opening* this dialog
+    painted the stored live key across the screen. No submit, no retry, no typing - the
+    step whose whole purpose is a key that had to be re-issued was displaying the current
+    one in clear text to anyone who could see the tab.
+    """
+    result = await _flow(_entry_with_listener()).async_step_reconfigure()
+
+    field = next(
+        value
+        for marker, value in result["data_schema"].schema.items()
+        if marker.schema == CONF_LOCAL_KEY
+    )
+
+    assert isinstance(field, TextSelector)
+    assert field.config["type"] == TextSelectorType.PASSWORD
 
 
 async def test_form_prefills_from_the_stored_entry():

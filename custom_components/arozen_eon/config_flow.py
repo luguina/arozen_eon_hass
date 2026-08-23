@@ -22,6 +22,11 @@ from homeassistant.config_entries import (
     OptionsFlow,
 )
 from homeassistant.const import CONF_HOST
+from homeassistant.helpers.selector import (
+    TextSelector,
+    TextSelectorConfig,
+    TextSelectorType,
+)
 
 from .const import (
     CONF_DEVICE_ID,
@@ -41,6 +46,29 @@ _LOGGER = logging.getLogger(__name__)
 
 DEFAULT_TITLE = "Arozen EON Pro 2"
 
+#: A masked box with a reveal toggle, on every step that asks for the key. A bare `str`
+#: renders in clear text: the frontend infers masking from the field *name*, and only when
+#: it contains "password", "secret" or "token" - `local_key` contains none of the three, so
+#: the credential strings.json warns about in the paragraph above the field was being drawn
+#: below it in full, readable by a screen share or by anyone standing behind the installer.
+#: A selector states the intent rather than hoping the name carries it, which is how core
+#: handles the same situation: 67 integrations in the 2026.8.1 wheel use this selector type
+#: in a config flow.
+#:
+#: Shared between the two steps instead of written out twice, so the user step and the
+#: reconfigure step cannot drift into disagreeing about how the key is rendered - they were
+#: two independent `str`s before this, which is why the same mistake had to be fixed twice.
+#: Safe to share: the config is validated once at construction and `__call__` only runs
+#: `vol.Schema(str)` over the submitted value, so the instance carries no per-flow state,
+#: exactly like the `str` it replaces.
+#:
+#: Deliberately no `autocomplete`, unlike the core flows that ask for an account password:
+#: this is a per-device key, and "current-password" would invite the browser's password
+#: manager to offer the Home Assistant login for the origin serving the form.
+LOCAL_KEY_SELECTOR: Final = TextSelector(
+    TextSelectorConfig(type=TextSelectorType.PASSWORD)
+)
+
 #: Built once at import rather than per call, because the retry path has to re-show *this*
 #: schema with the user's own answers suggested back into it. `add_suggested_values_to_schema`
 #: copies every marker before setting `description["suggested_value"]`, so the constant is
@@ -49,7 +77,7 @@ STEP_USER_SCHEMA: Final = vol.Schema(
     {
         vol.Required(CONF_HOST): str,
         vol.Required(CONF_DEVICE_ID): str,
-        vol.Required(CONF_LOCAL_KEY): str,
+        vol.Required(CONF_LOCAL_KEY): LOCAL_KEY_SELECTOR,
         vol.Required(CONF_PROTOCOL_VERSION, default=DEFAULT_PROTOCOL_VERSION): vol.In(
             PROTOCOL_VERSIONS
         ),
@@ -105,16 +133,24 @@ class ArozenConfigFlow(ConfigFlow, domain=DOMAIN):
         # Suggested back on a retry: all four, the local key included. A wrong protocol
         # version reports the same `cannot_connect` as a wrong key, so the documented remedy
         # is "try 3.4, then 3.3", and a form that clears itself charges two extra re-types of
-        # a 22-character device ID and a 16-character key for taking that advice. Echoing a
-        # live credential is the deliberate half of that: it is the user's own key, returned
-        # only to the session that just typed it, into a field the frontend does not mask on
-        # the way in either - it infers masking for a plain `str` from a name containing
-        # "password", "secret" or "token", and `local_key` matches none of the three. Core
-        # agrees: of its 109 `add_suggested_values_to_schema` call sites whose schema holds a
-        # secret, 46 pass bare `user_input` and 2 strip the secret out, and the generic
-        # handler every schema-driven flow inherits merges `user_input` in unfiltered
-        # (`SchemaCommonFlowHandler._show_next_step`). On the first pass `user_input` is None,
-        # which the helper reads as "no suggestions": blank fields, version defaulted to 3.5.
+        # a 22-character device ID and a 16-character key for taking that advice.
+        #
+        # Echoing a live credential is the deliberate half of that, and it was argued once on
+        # the grounds that the field was unmasked on the way in anyway, so handing it back
+        # exposed nothing new. LOCAL_KEY_SELECTOR retired that leg. The conclusion stands on
+        # the two that remain, and masking supplies a third rather than costing one. What
+        # returns is dots, in the box the user just filled, in the same session, in answer to
+        # that session's own submit: nobody sees the key who did not watch it typed, and the
+        # reveal toggle keeps it checkable by the one who did. And blanking it now costs more
+        # than it did before the mask - a re-typed key can no longer be proof-read on screen
+        # at all, so clearing the field would make a typo in 16 characters harder to catch,
+        # in exchange for hiding the value from the person who chose it. Core lands here in
+        # this exact shape: 24 integrations in the 2026.8.1 wheel hand bare `user_input` back
+        # into a schema that masks a secret with this selector, `aws_s3` from a hoisted
+        # module-level constant like this one.
+        #
+        # On the first pass `user_input` is None, which the helper reads as "no suggestions":
+        # blank fields, version defaulted to 3.5.
         return self.async_show_form(
             step_id="user",
             data_schema=self.add_suggested_values_to_schema(
@@ -188,7 +224,7 @@ class ArozenConfigFlow(ConfigFlow, domain=DOMAIN):
                 vol.Schema(
                     {
                         vol.Required(CONF_HOST): str,
-                        vol.Required(CONF_LOCAL_KEY): str,
+                        vol.Required(CONF_LOCAL_KEY): LOCAL_KEY_SELECTOR,
                         vol.Required(CONF_PROTOCOL_VERSION): vol.In(PROTOCOL_VERSIONS),
                     }
                 ),
