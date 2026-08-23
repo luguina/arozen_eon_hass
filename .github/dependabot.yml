@@ -6,6 +6,12 @@
 # a new release cannot turn CI red on a morning nobody changed anything. A pip ecosystem
 # here would spend its life opening pull requests to undo both.
 #
+# tinytuya adds a mechanical reason on top of that one. It is pinned in two files that must
+# carry the same string - requirements_test.txt and the integration's manifest.json - and
+# dependabot can only see the first. Every bump it opened would be a red pull request,
+# because tests/test_packaging.py asserts the two agree and a manifest is not a file any
+# pip ecosystem knows how to edit. The pair moves by hand, together, or not at all.
+#
 # Actions are the opposite case: they are unversioned infrastructure that silently rots,
 # and a bumped SHA has no bearing on what the integration does.
 
