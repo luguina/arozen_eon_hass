@@ -136,9 +136,8 @@ the reply comes back undecryptable, and the form reports it exactly the way it r
 So if setup rejects credentials you are confident in, drop to `3.4`, then `3.3`, *before* you
 start doubting the key. `3.3` and `3.4` stay selectable because a firmware update can move it.
 
-> **Keep the four values somewhere you can paste from.** A rejected attempt clears the form and
-> resets the version to `3.5` — the one field you were iterating
-> ([#32](https://github.com/luguina/arozen_ha_controller/issues/32)).
+> **A rejected attempt hands your answers back**, version included, so iterating costs one
+> dropdown change rather than a full re-entry.
 
 *If you would rather measure than guess:* `python -m tinytuya scan` broadcasts on the LAN and
 reports every Tuya device that answers, with its address **and the protocol version that device

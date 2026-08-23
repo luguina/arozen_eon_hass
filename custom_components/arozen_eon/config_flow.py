@@ -12,7 +12,7 @@ the protocol version is right, in one exchange.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Final
 
 import voluptuous as vol
 from homeassistant.config_entries import (
@@ -40,6 +40,21 @@ from .device import ArozenDevice, ArozenError
 _LOGGER = logging.getLogger(__name__)
 
 DEFAULT_TITLE = "Arozen EON Pro 2"
+
+#: Built once at import rather than per call, because the retry path has to re-show *this*
+#: schema with the user's own answers suggested back into it. `add_suggested_values_to_schema`
+#: copies every marker before setting `description["suggested_value"]`, so the constant is
+#: never mutated and one flow's input cannot leak into the next flow's form.
+STEP_USER_SCHEMA: Final = vol.Schema(
+    {
+        vol.Required(CONF_HOST): str,
+        vol.Required(CONF_DEVICE_ID): str,
+        vol.Required(CONF_LOCAL_KEY): str,
+        vol.Required(CONF_PROTOCOL_VERSION, default=DEFAULT_PROTOCOL_VERSION): vol.In(
+            PROTOCOL_VERSIONS
+        ),
+    }
+)
 
 
 async def _async_validate(
@@ -87,17 +102,23 @@ class ArozenConfigFlow(ConfigFlow, domain=DOMAIN):
                     },
                 )
 
+        # Suggested back on a retry: all four, the local key included. A wrong protocol
+        # version reports the same `cannot_connect` as a wrong key, so the documented remedy
+        # is "try 3.4, then 3.3", and a form that clears itself charges two extra re-types of
+        # a 22-character device ID and a 16-character key for taking that advice. Echoing a
+        # live credential is the deliberate half of that: it is the user's own key, returned
+        # only to the session that just typed it, into a field the frontend does not mask on
+        # the way in either - it infers masking for a plain `str` from a name containing
+        # "password", "secret" or "token", and `local_key` matches none of the three. Core
+        # agrees: of its 109 `add_suggested_values_to_schema` call sites whose schema holds a
+        # secret, 46 pass bare `user_input` and 2 strip the secret out, and the generic
+        # handler every schema-driven flow inherits merges `user_input` in unfiltered
+        # (`SchemaCommonFlowHandler._show_next_step`). On the first pass `user_input` is None,
+        # which the helper reads as "no suggestions": blank fields, version defaulted to 3.5.
         return self.async_show_form(
             step_id="user",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_HOST): str,
-                    vol.Required(CONF_DEVICE_ID): str,
-                    vol.Required(CONF_LOCAL_KEY): str,
-                    vol.Required(
-                        CONF_PROTOCOL_VERSION, default=DEFAULT_PROTOCOL_VERSION
-                    ): vol.In(PROTOCOL_VERSIONS),
-                }
+            data_schema=self.add_suggested_values_to_schema(
+                STEP_USER_SCHEMA, user_input
             ),
             errors=errors,
         )
