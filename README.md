@@ -53,93 +53,141 @@ directory and restart.
 
 ## Set it up
 
-**Settings → Devices & Services → Add Integration → Arozen EON Pro 2 Diffuser.**
+You are collecting **four values**. Three come from one tool; the fourth you can guess correctly
+on the first try. The form at **Settings → Devices & Services → Add Integration → Arozen EON Pro
+2 Diffuser** proves all four before it accepts them — it opens a real connection and reads
+status, so a wrong key or version fails there rather than silently later.
 
-Four fields, and the form proves them before it accepts them — it opens a real connection and
-reads status, so a wrong key or version fails here rather than silently later.
+| Field | Looks like | Where it comes from |
+|---|---|---|
+| **IP address** | `192.168.x.x` — where the diffuser sits on your LAN | Steps 2–3 |
+| **Device ID** | 22 characters starting `bf` — its permanent identity in Tuya's world | Steps 2–3 |
+| **Local key** | 16 characters. ⚠️ A **live credential** — see [below](#about-the-local_key) | Steps 2–3 |
+| **Protocol version** | `3.3`, `3.4` or `3.5` — **`3.5` for this unit**, and the default the form offers | Step 4 |
 
-| Field | What it is |
-|---|---|
-| **IP address** | Where the diffuser sits on your LAN |
-| **Device ID** | Its permanent identity in Tuya's world — 22 characters, starting `bf` |
-| **Local key** | The secret the firmware accepts commands under. ⚠️ A **live credential** — see [below](#about-the-local_key) |
-| **Protocol version** | Which dialect the firmware speaks. `3.3`, `3.4` or `3.5` — **`3.5` for this unit**, and the default the form offers |
+**None of this needs Python** on Home Assistant OS or Supervised. The one command-line route is
+kept at the end, as a fallback.
 
-### Where the device ID and local key come from
+### Why the local key is the hard part
 
-**This is the hard part, and it is hard on purpose.** The diffuser is sold as a cloud
-appliance: you pair it to a Tuya account with the Smart Life app, and from then on the app
-talks to Tuya's servers and Tuya's servers talk to the device. The `local_key` is what lets
-you skip that round trip and address the device directly on your own network — and nothing in
-the product wants you to have it. It is **not printed on the device**, **not shown anywhere in
-the app**, and **not readable from the device itself**. It is minted when the device is paired,
-and it only ever leaves Tuya through Tuya's own APIs.
+**It is hard on purpose.** The diffuser is sold as a cloud appliance: you pair it to a Tuya
+account with the Smart Life app, and from then on the app talks to Tuya's servers and Tuya's
+servers talk to the device. The `local_key` is what lets you skip that round trip and address the
+device directly on your own network — and nothing in the product wants you to have it. It is
+**not printed on the device**, **not shown anywhere in the app**, and **not readable from the
+device itself**. It is minted when the device is paired, and it only ever leaves Tuya through
+Tuya's own APIs.
 
-So every route below is the same manoeuvre: authenticate as yourself, ask Tuya which devices
-are on your account, and read the key out of the reply. **The diffuser has to be paired in the
-Smart Life / Tuya app first** — if it is not in the app, there is nothing for either tool to
-read.
+So every route below is the same manoeuvre: authenticate as yourself, ask Tuya which devices are
+on your account, and read the key out of the reply. **The diffuser has to be paired in the Smart
+Life / Tuya app first** — if it is not in the app, there is nothing for any tool to read.
 
-**Route A — [`tuya-local-key`](https://github.com/vineetchoudhary/tuya-local-key). Start here.**
-A QR login against Tuya's device-sharing SDK, and **no Tuya IoT developer account needed**,
-which removes what used to be the worst part of this job. It runs as a CLI, a Docker container
-or a Home Assistant add-on, and prints device ID, `local_key`, IP, online status and category
-for every device on the account.
+### Step 1 — Find your Smart Life user code
 
-One trap, and it catches most people once: **the QR code expires in a minute or two.** Have the
-phone unlocked with the Smart Life app already open on its scanner *before* you generate it.
+The login handle the tool needs, and nothing tells you it exists.
 
-**Route B — `tinytuya wizard`. The classic route, and heavier.**
+In the **Smart Life app**: **Me** tab → **⚙️** top right → **Account and Security** → **User
+Code**, at the bottom of that screen.
+
+### Step 2 — Run `tuya-local-key`
+
+[`tuya-local-key`](https://github.com/vineetchoudhary/tuya-local-key) logs in by QR code against
+Tuya's device-sharing SDK — the same mechanism Home Assistant's own Tuya integration uses — and
+needs **no Tuya IoT developer account**, which removes what used to be the worst part of this
+job.
+
+**As a Home Assistant add-on**, on HA OS or Supervised. No terminal at all:
+
+1. **Settings → Add-ons → Add-on Store** (newer Home Assistant labels these **Apps → App Store**)
+2. Top-right **⋮ → Repositories**
+3. Add `https://github.com/vineetchoudhary/tuya-local-key`, then **Close**
+4. Install **Tuya Local Key** from the store, **Start** it, and **Open Web UI**
+
+**As a container**, on HA Container or Core, or on any machine with Docker — then open
+`http://localhost:8000` for the same page:
+
+```sh
+docker run -d --name tuya-local-key -p 8000:8000 \
+  -v tuya-session:/data ghcr.io/vineetchoudhary/tuya-local-key:latest
+```
+
+### Step 3 — Scan the QR code, and read off three of the four values
+
+Enter your user code. A QR code appears.
+
+**Read this before you generate it: the QR expires in a minute or two.** Have the phone unlocked
+and the Smart Life app already open, and know where you are going — in the app, **+** (top right)
+→ **Scan** → point it at the code → **Confirm login**. If the phone will not focus on the screen,
+the tool also writes the code out as a PNG you can open larger.
+
+The page then lists every device on the account. Find the diffuser and copy its **device ID**,
+**local key** and **IP address**.
+
+> **Check what you copied.** The device ID is 22 characters beginning `bf`; the local key is 16.
+> The tool prints a `uuid` next to the device ID that looks much like it — if a value comes out
+> the wrong length, that is usually which column it came from.
+
+### Step 4 — The protocol version: try it, don't measure it
+
+Nothing to install for this one. The form offers `3.5`, which is what this unit speaks.
+
+**A wrong protocol version does not present as a wrong protocol version.** The connection opens,
+the reply comes back undecryptable, and the form reports it exactly the way it reports a bad key.
+So if setup rejects credentials you are confident in, drop to `3.4`, then `3.3`, *before* you
+start doubting the key. `3.3` and `3.4` stay selectable because a firmware update can move it.
+
+> **Keep the four values somewhere you can paste from.** A rejected attempt clears the form and
+> resets the version to `3.5` — the one field you were iterating
+> ([#32](https://github.com/luguina/arozen_ha_controller/issues/32)).
+
+*If you would rather measure than guess:* `python -m tinytuya scan` broadcasts on the LAN and
+reports every Tuya device that answers, with its address **and the protocol version that device
+is speaking**. It is the only step here that wants Python, and it saves you two clicks.
+
+### Step 5 — Close the Smart Life app, then fill the form
+
+During recon, local *writes* failed intermittently while the app was open and landed reliably
+once it was closed. This form only *reads*, so it may well survive an open app — but closing it
+costs nothing, and a contended connection here would look like bad credentials rather than like
+contention, which is the expensive kind of wrong turn.
+
+Then **Settings → Devices & Services → Add Integration → Arozen EON Pro 2 Diffuser**, paste the
+four values, and submit. It validates against the real device, so success here means it genuinely
+works.
+
+### Step 6 — Three minutes that save you a bad evening
+
+1. **Give the diffuser a DHCP reservation** in your router. The config entry stores an address,
+   not a name, and a lease change is a silent break
+2. **Put the `local_key` in your password manager**, and nowhere else
+3. **Clean up the tool.** It caches your login, so anyone who reaches its Web UI can read every
+   local key on the account. Log out, or uninstall the add-on — you needed it once. For the
+   container: `docker rm -f tuya-local-key && docker volume rm tuya-session`
+
+### If the QR route fails — `tinytuya wizard`
+
+The classic route, and heavier:
 
 ```sh
 pip install tinytuya
 python -m tinytuya wizard
 ```
 
-This one *does* want a **Tuya IoT Platform** project with an Access ID and Secret, and inside
-that project you must also "Link Tuya App Account" so the project can see devices you paired in
-the app. The trial expires and needs periodic renewal — that lapsing is the usual reason a setup
-that worked once cannot be reproduced six months later. Note where it puts its output:
-`devices.json`, `tinytuya.json` and `snapshot.json`, in the working directory, **each containing
-live keys in plaintext**.
-
-### Finding the IP, and confirming the protocol version
-
-```sh
-python -m tinytuya scan
-```
-
-It broadcasts on the LAN and reports every Tuya device that answers, with its address **and the
-protocol version that device is speaking** — which is the only honest way to fill the fourth
-field. `3.5` is what this unit reports; `3.3` and `3.4` stay selectable because a firmware
-update can move it.
-
-**A wrong protocol version does not present as a wrong protocol version.** The connection opens,
-the reply comes back undecryptable, and the form reports it the way it reports a bad key. So if
-setup rejects credentials you are confident in, change the version before you start doubting the
-key.
-
-### The order that works
-
-1. Pair the diffuser in the Smart Life app, if it is not already
-2. Route A or Route B → **device ID** and **local key**
-3. `python -m tinytuya scan` → **IP address** and **protocol version**
-4. **Close the Smart Life app.** During recon, local *writes* failed intermittently while it was
-   open and landed reliably once it was closed. This form only *reads*, so it may well survive an
-   open app — but closing it costs nothing, and a contended connection here would look like bad
-   credentials rather than like contention, which is the expensive kind of wrong turn
-5. Fill the form and submit — it validates against the real device, so success here means it
-   genuinely works
-6. Give the diffuser a **DHCP reservation** in your router. The config entry stores an address,
-   not a name, and a lease change is a silent break
-7. Put the `local_key` in your password manager, and nowhere else
+This one *does* want a **Tuya IoT Platform** project with an Access ID and Secret, and inside that
+project you must also "Link Tuya App Account" so the project can see devices you paired in the
+app. The trial expires and needs periodic renewal — that lapsing is the usual reason a setup that
+worked once cannot be reproduced six months later. Note where it puts its output: `devices.json`,
+`tinytuya.json` and `snapshot.json`, in the working directory, **each containing live keys in
+plaintext**. Delete them when you are done.
 
 ### Re-pairing the diffuser invalidates the key
 
 Removing the device from the app and adding it back **mints a new `local_key`**. The device ID
 survives; the key does not. Home Assistant will then fail every poll, with the reason on
-`sensor.…_failed_polls`. The fix is to reconfigure the entry with the new key — and that same
-property is the remedy if you ever leak one, which is worth knowing before you need it.
+`sensor.…_failed_polls`. The fix today is to **delete the integration entry and add it again**
+with the new key — there is no in-place edit yet
+([#31](https://github.com/luguina/arozen_ha_controller/issues/31)). That same property is the
+remedy if you ever leak a key, which is worth knowing before you need it.
 
 Recon-level detail on all of the above: [datapoints.md §Method](docs/datapoints.md#1-get-the-credentials).
 
