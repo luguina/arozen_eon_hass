@@ -3,10 +3,10 @@
 The rule is that each identifier gets **one** sanctioned home in this repo, so that scrubbing
 before publication is a single edit rather than an archaeology exercise. It was stated in prose,
 in a file about captures, and it was broken in `docs/datapoints.md` from the initial commit until
-[#20](https://github.com/luguina/arozen_ha_controller/issues/20) — with the violation *known*, and
-written down in a capture header, for a day before anyone fixed it. That is the argument for this
-file: a rule enforced by whoever remembers to run the README's sweep is a rule that holds until
-somebody is in a hurry.
+the redaction cleanup that finally swept it out — with the violation *known*, and written down in
+a capture header, for a day before anyone fixed it. That is the argument for this file: a rule
+enforced by whoever remembers to run the README's sweep is a rule that holds until somebody is
+in a hurry.
 
 What it reads is the working tree as a commit would take it — the index, plus every untracked file
 `.gitignore` does not cover — so an offending line is caught while it is still a line in a file
@@ -18,8 +18,8 @@ Two things it deliberately does **not** do:
 * it does not know the real device id, and never puts one in a test file. It reads the id out of
   the sanctioned location and counts where else that shape occurs, so the check works without the
   test suite becoming a second copy of the thing it is protecting;
-* it says nothing about git history, which is the other half of #20 and cannot be fixed by a
-  test — see [ADR-007](../docs/decisions.md). A tree this file calls clean can still have the
+* it says nothing about git history, which is the other half of that cleanup and cannot be fixed
+  by a test — see [ADR-007](../docs/decisions.md). A tree this file calls clean can still have the
   value one `git log -p` away, and the README's history sweep is what answers that.
 
 No failure message here prints an identifier. A test that leaks the value on the way to reporting

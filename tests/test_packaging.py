@@ -8,15 +8,17 @@ first and could not do the job, for a structural reason worth writing down: its 
 checks go through the authenticated GitHub API, but every *file content* check downloads
 from `https://raw.githubusercontent.com/{repo}/{ref}/{path}` with no credentials at all
 (`repositories/base.py::get_hacs_json_raw`, `repositories/integration.py::
-get_integration_manifest`). **This repository is private, so those URLs 404**, the download
-returns None, and the validator reports the file as invalid. Confirmed both ways: the run
-failed exactly on `hacsjson` and `integration_manifest` while every tree- and metadata-based
-check passed, and both raw URLs return 404 to an unauthenticated client.
+get_integration_manifest`). **Those URLs 404 for any repository the unauthenticated fetch
+cannot read**, the download returns None, and the validator reports as invalid a file it
+never saw — a property of the action, not of the repository it is aimed at. Confirmed both
+ways at the time: the run failed exactly on `hacsjson` and `integration_manifest` while every
+tree- and metadata-based check passed, and both raw URLs returned 404 to an unauthenticated
+client.
 
 So the schemas below are transcribed from HACS's own
 `custom_components/hacs/utils/validate.py` and applied to the working tree, which is
 strictly better here — the real rules, on the actual files, with no network and no
-dependence on the repository being public. The cost is that a schema change upstream will
+dependence on who can read the repository. The cost is that a schema change upstream will
 not reach us on its own; that is the trade, and it is written here so it is not forgotten.
 """
 
