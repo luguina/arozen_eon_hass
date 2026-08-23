@@ -251,3 +251,61 @@ async def test_successful_submit_strips_pasted_whitespace(monkeypatch):
     result = await _flow().async_step_user(padded)
 
     assert result["data"] == SUBMITTED
+
+
+# -- The copy above the fields ------------------------------------------------------------
+
+
+def _user_step_descriptions() -> list[str]:
+    """The description as each of the two string files carries it.
+
+    `strings.json` is what hassfest validates; `translations/en.json` is what a running
+    instance actually renders. They are conventionally identical, so an edit to one and
+    not the other ships a dialog nobody reviewed.
+    """
+    import json
+    from pathlib import Path
+
+    root = Path(config_flow_module.__file__).parent
+    return [
+        json.loads(path.read_text(encoding="utf-8"))["config"]["step"]["user"]["description"]
+        for path in (root / "strings.json", root / "translations" / "en.json")
+    ]
+
+
+def test_the_two_string_files_agree_on_the_setup_description():
+    first, second = _user_step_descriptions()
+
+    assert first == second
+
+
+def test_the_setup_description_speaks_to_a_stranger():
+    """No project vocabulary, and the QR-login tool named as the route to take.
+
+    This string is the one screen every installer sees, before they have read anything of
+    this repository. "The recon step" is our own history showing through: it means a
+    document they have not opened and are not going to open while staring at four empty
+    fields.
+    """
+    for description in _user_step_descriptions():
+        assert "recon" not in description.lower()
+        assert "tuya-local-key" in description
+
+
+def test_the_setup_description_carries_no_url():
+    """A URL here outlives the repository name it is written against.
+
+    The pointer is the README, named rather than linked, so a rename cannot leave a dead
+    link in the setup dialog.
+    """
+    for description in _user_step_descriptions():
+        assert "http" not in description.lower()
+
+
+def test_the_setup_description_still_warns_about_the_local_key():
+    """Someone is pasting a live secret into a form; the warning is the point of the text."""
+    for description in _user_step_descriptions():
+        assert (
+            "The local key is a live credential — it is stored in Home Assistant's "
+            "config entry like any other integration secret." in description
+        )
