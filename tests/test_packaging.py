@@ -76,6 +76,15 @@ README_TESTED_VERSION = re.compile(r"\*\*Home Assistant ([\d.]+)\*\* is what thi
 #: `homeassistant==2026.8.1` in requirements_test.txt — the core this suite actually runs against.
 PINNED_CORE_VERSION = re.compile(r"^homeassistant==([\d.]+)\s*$", re.MULTILINE)
 
+#: `tinytuya==1.20.0` in requirements_test.txt — the version CI actually exercises.
+PINNED_TINYTUYA_VERSION = re.compile(r"^tinytuya==([\d.]+)\s*$", re.MULTILINE)
+
+#: A manifest requirement that names one version and no other. Anchored on `==` because
+#: that is the entire property being asserted: anything with a range in it is a promise
+#: about versions nobody ran. `;` is excluded from the version so an environment marker
+#: (`foo==1.0; python_version < "3.13"`) is parsed rather than swallowed.
+EXACT_PIN = re.compile(r"^([A-Za-z0-9_.\-]+)==([^\s;]+)")
+
 
 @pytest.fixture
 def integration_dir() -> Path:
@@ -137,6 +146,64 @@ def test_the_minimum_home_assistant_version_is_the_one_that_was_tested():
 def test_integration_manifest_matches_the_schema_hacs_enforces(integration_dir: Path):
     manifest = json.loads((integration_dir / "manifest.json").read_text())
     INTEGRATION_MANIFEST_SCHEMA(manifest)
+
+
+def test_every_manifest_requirement_names_exactly_one_version(integration_dir: Path):
+    """A range in `requirements` ships a version nobody tested into somebody's house.
+
+    Home Assistant installs these with pip when it loads the integration, so the resolved
+    version is decided on the user's machine, on the day they install — not here, and not
+    by anything this repository can see afterwards. `tinytuya>=1.16.0` meant a tinytuya 2.0
+    with a changed `status()` return shape would arrive in every install with no commit in
+    this repository, and the first anyone would know of it is entities going `unavailable`.
+
+    Core does not leave this open: of the 1483 integrations in the 2026.8.1 wheel, 1218
+    requirements use `==` and **zero** use a range. Not a convention with exceptions — a
+    convention with no counterexamples.
+
+    The exposure is sharper here than the line count suggests, because `device.py` leans on
+    three tinytuya behaviours that are documented nowhere but its own docstring: that
+    `status()` returns a dict carrying a `"dps"` key, that a failed exchange comes back as
+    an error payload rather than raising, and that `set_value()` echoes the new state.
+    """
+    manifest = json.loads((integration_dir / "manifest.json").read_text())
+    for requirement in manifest.get("requirements", []):
+        assert EXACT_PIN.match(requirement), (
+            f"{requirement!r} does not pin one version. Home Assistant resolves this on the "
+            f"user's machine, so a range means the installed version is whatever pip picks "
+            f"that day — write it as `name==version`"
+        )
+
+
+def test_the_shipped_tinytuya_is_the_one_the_suite_ran(integration_dir: Path):
+    """The same fact in two files, one of which ships and the other of which is tested.
+
+    `manifest.json` is what gets installed into a user's Home Assistant.
+    `requirements_test.txt` is what CI proves the code works against. Neither file can see
+    the other, and only one of them is exercised by anything — so the drift is silent in
+    the direction that matters: a green suite, and a different library in the house.
+
+    Asserting equality rather than compatibility is deliberate. "The manifest allows what
+    the suite ran" is satisfied by a range, which is the thing being removed; the property
+    worth having is that the version a user gets is the version a test result refers to.
+    """
+    manifest = json.loads((integration_dir / "manifest.json").read_text())
+    shipped = [
+        match.group(2)
+        for match in map(EXACT_PIN.match, manifest.get("requirements", []))
+        if match and match.group(1) == "tinytuya"
+    ]
+    assert shipped, (
+        "manifest.json no longer pins `tinytuya==` — if the transport moved off tinytuya, "
+        "retire this test with it rather than deleting the assertion"
+    )
+
+    pinned = PINNED_TINYTUYA_VERSION.search((REPO / "requirements_test.txt").read_text())
+    assert pinned, "requirements_test.txt no longer pins `tinytuya==`"
+    assert shipped == [pinned.group(1)], (
+        f"manifest.json ships tinytuya {shipped} but the suite ran against "
+        f"{pinned.group(1)} — the tests say nothing about the library users get"
+    )
 
 
 def test_the_directory_name_is_the_domain(integration_dir: Path):

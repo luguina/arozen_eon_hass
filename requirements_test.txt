@@ -13,6 +13,12 @@ pytest-asyncio==1.3.0
 # The integration's own manifest requirement, repeated here because the tests import
 # device.py directly - Home Assistant only installs manifest requirements when it loads
 # the integration, which the test venv never does.
+#
+# This version and the one in custom_components/arozen_eon/manifest.json must be the same
+# string, and tests/test_packaging.py fails if they are not. The manifest is what gets
+# installed into a user's Home Assistant; this file is what CI proves the code works
+# against. A bump moves both or neither - a manifest permitting a version the suite never
+# ran is the failure this pin exists to prevent, and it is silent from here.
 tinytuya==1.20.0
 
 # Pinned on purpose: an unpinned ruff picks up new rules on release and turns CI red
