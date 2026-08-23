@@ -143,7 +143,10 @@ class ArozenIntensityRestoresSensor(ArozenDiagnosticSensor):
 
 
 class ArozenBatterySensor(ArozenEntity, SensorEntity):
-    """Battery percent (DP 101). The unit is mains-powered but has a battery too."""
+    """Battery percent (DP 101). The unit is rechargeable and genuinely runs off this — it
+    discharged one point per 61 s of runtime through the remote walk — rather than carrying a
+    cell as backup to mains. DP 102 reports which of the two it is on.
+    """
 
     _attr_name = "Battery"
     _attr_device_class = SensorDeviceClass.BATTERY

@@ -25,11 +25,35 @@ reasons — but note it is a *weaker* commitment here, because unlike the siblin
 a genuinely working fallback rather than an inversion of the project's point. The official Tuya
 integration already talks to this device; it just has nothing useful to say about it.
 
-**What makes it viable, and it was not a given.** The device is **mains-powered** (confirmed by
-the project owner, 2026-08-10). A battery-powered Tuya device sleeps, drops off the LAN between wakeups, and
-cannot be polled locally — which would have forced the cloud path regardless of preference. That
-question was the single largest risk to this whole approach and it resolved in our favour before
-any work started.
+**What made this look viable, as filed — and the premise is false.** The device is
+**mains-powered** (confirmed by the project owner, 2026-08-10). A battery-powered Tuya device sleeps, drops off
+the LAN between wakeups, and cannot be polled locally — which would have forced the cloud path
+regardless of preference. That question was the single largest risk to this whole approach and it
+resolved in our favour before any work started.
+
+**Correction, 2026-08-23 — right decision, wrong reason on file.** The device is not mains-only:
+**it has a battery**, and it runs off it. DP 101 is a battery gauge, closed on 2026-08-21 against
+the phone app's own readout, and DP 102 reports the charging state; both ship as entities
+([datapoints.md](datapoints.md)). So the condition this entry called the single largest risk is a
+condition the device is routinely in, and the paragraph above rules out an approach that has been
+working the whole time.
+
+**What actually makes local polling viable is that this device does not sleep, and unlike
+"mains-powered" that is a measurement.** The remote walk of 2026-08-21
+([capture](captures/remote-walk-2026-08-21.jsonl)) polled it every 2 s for 44 minutes, and
+`dp_watch.py` emits a JSON line for every poll that throws or comes back without `dps` — the
+capture contains **none**. The poller runs with `set_socketPersistent(False)`, so every one of
+those polls was a fresh TCP connect and handshake rather than a socket held open across a doze.
+The first half-hour ran **on battery**, DP 102 reading `wcd`, the gauge falling one point every
+61 s through seven consecutive ticks. Inside that stretch sit **17 minutes with the diffuser
+switched off** and not one datapoint moving — idle, on battery, unplugged, which is exactly the
+state a sleeping Tuya device drops off the LAN in. It answered every poll.
+
+**The bound on that, stated because it is the part still open.** Forty-four minutes is the
+longest unbroken observation there is; nothing has watched an idle overnight on battery. The
+no-sleep finding is solid at the scale measured and untested beyond it, which is why a future
+"it went unavailable by morning" has a suspect ready
+([dossier §1](research/dossier.md)).
 
 **What would change this.** The device refusing local connections, or shipping a protocol
 version whose session keys we cannot derive. Then the fallback ladder is: LocalTuya →

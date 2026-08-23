@@ -6,9 +6,12 @@ integration changes.
 
 **Status: observed and write-verified** (2026-08-21). Every mapping below comes from the
 control walk, the duty-cycle measurement, or a local write test recorded in
-docs/datapoints.md — the standard `xxj` codes appear nowhere on this device; every
-meaningful DP is vendor-specific, most in the 100+ range. The registered cloud schema is
-empty (dossier §6.4), so nothing but this file describes the device's control surface.
+docs/datapoints.md. The registered cloud schema is empty (dossier §6.4), so nothing but this
+file describes the device's control surface — and the numbering gives nothing away either.
+Every **writable** DP here is low (2, 3, 4, 7), exactly where a standard device's controls
+would sit; everything from 101 up is status, telemetry or a firmware constant. An earlier
+revision of this docstring said the reverse — "every meaningful DP is vendor-specific, most
+in the 100+ range" — which was the pre-recon hypothesis, not the map below.
 
 **The distinction this file exists to hold on to: command DPs vs status DPs.** The first
 pass at this map read the device's own valve state (DP 103) as the power switch, because
