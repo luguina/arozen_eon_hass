@@ -23,6 +23,7 @@ not reach us on its own; that is the trade, and it is written here so it is not 
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -66,6 +67,14 @@ INTEGRATION_MANIFEST_SCHEMA = vol.Schema(
 )
 
 
+#: `**Home Assistant 2026.8.1** is what this is developed and tested against` — the sentence
+#: the README's Install section opens with, which is the promise a user reads before installing.
+README_TESTED_VERSION = re.compile(r"\*\*Home Assistant ([\d.]+)\*\* is what this is developed")
+
+#: `homeassistant==2026.8.1` in requirements_test.txt — the core this suite actually runs against.
+PINNED_CORE_VERSION = re.compile(r"^homeassistant==([\d.]+)\s*$", re.MULTILINE)
+
+
 @pytest.fixture
 def integration_dir() -> Path:
     """The one integration directory, asserted to be the only one.
@@ -82,6 +91,45 @@ def integration_dir() -> Path:
 def test_hacs_json_matches_the_schema_hacs_enforces():
     hacs_json = json.loads((REPO / "hacs.json").read_text())
     HACS_MANIFEST_SCHEMA(hacs_json)
+
+
+def test_the_minimum_home_assistant_version_is_the_one_that_was_tested():
+    """One fact, written down in three independent places, only one of which has teeth.
+
+    `hacs.json`'s `homeassistant` is the floor HACS enforces — it refuses to download onto
+    an older core rather than letting the install fail at runtime, in a house. The schema
+    above only asks for a string, so nothing but this test stops that string from being a
+    version nobody ran.
+
+    It is also the copy nobody reads, so it is the one that drifts when the tested core is
+    bumped in `requirements_test.txt` and the README. Declaring a floor *below* what was
+    tested would be worse than declaring none at all: an untested guess that HACS then
+    presents to the user as a guarantee.
+    """
+    hacs_json = json.loads((REPO / "hacs.json").read_text())
+    assert "homeassistant" in hacs_json, (
+        "hacs.json declares no minimum Home Assistant version, so HACS will offer this "
+        "integration to a core that cannot run it"
+    )
+    declared = hacs_json["homeassistant"]
+
+    pinned = PINNED_CORE_VERSION.search((REPO / "requirements_test.txt").read_text())
+    assert pinned, "requirements_test.txt no longer pins `homeassistant==`"
+    assert declared == pinned.group(1), (
+        f"hacs.json requires Home Assistant {declared}, but the suite runs against "
+        f"{pinned.group(1)} — bump both, or the floor is a version nobody tested"
+    )
+
+    promised = README_TESTED_VERSION.search((REPO / "README.md").read_text())
+    assert promised, (
+        "README.md no longer opens Install with `**Home Assistant X.Y.Z** is what this is "
+        "developed and tested against` — point this test at the new wording rather than "
+        "dropping the check"
+    )
+    assert declared == promised.group(1), (
+        f"hacs.json requires Home Assistant {declared}, README.md promises "
+        f"{promised.group(1)} — a user reading one and HACS enforcing the other"
+    )
 
 
 def test_integration_manifest_matches_the_schema_hacs_enforces(integration_dir: Path):
