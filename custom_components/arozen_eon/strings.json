@@ -12,7 +12,7 @@
       },
       "user": {
         "title": "Connect to the diffuser",
-        "description": "Device ID, local key and protocol version come from the recon step (tuya-local-key QR login or `tinytuya wizard`). The local key is a live credential — it is stored in Home Assistant's config entry like any other integration secret.",
+        "description": "IP address, device ID and local key come from `tuya-local-key`, which logs in by QR code and needs no Tuya IoT developer account; the protocol version is `3.5` on this unit. The README's **Set it up** section has the steps. The local key is a live credential — it is stored in Home Assistant's config entry like any other integration secret.",
         "data": {
           "host": "IP address",
           "device_id": "Device ID",
