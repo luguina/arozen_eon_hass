@@ -9,17 +9,25 @@ checks go through the authenticated GitHub API, but every *file content* check d
 from `https://raw.githubusercontent.com/{repo}/{ref}/{path}` with no credentials at all
 (`repositories/base.py::get_hacs_json_raw`, `repositories/integration.py::
 get_integration_manifest`). **Those URLs 404 for any repository the unauthenticated fetch
-cannot read**, the download returns None, and the validator reports as invalid a file it
-never saw — a property of the action, not of the repository it is aimed at. Confirmed both
-ways at the time: the run failed exactly on `hacsjson` and `integration_manifest` while every
-tree- and metadata-based check passed, and both raw URLs returned 404 to an unauthenticated
-client.
+cannot read**, which this one was for the whole of the development that produced it. The
+download returns None and the validator reports as invalid a file it never saw — a property
+of the action, not of the repository it is aimed at. Confirmed both ways at the time: the run
+failed exactly on `hacsjson` and `integration_manifest` while every tree- and metadata-based
+check passed, and both raw URLs returned 404 to an unauthenticated client.
 
 So the schemas below are transcribed from HACS's own
 `custom_components/hacs/utils/validate.py` and applied to the working tree, which is
 strictly better here — the real rules, on the actual files, with no network and no
 dependence on who can read the repository. The cost is that a schema change upstream will
 not reach us on its own; that is the trade, and it is written here so it is not forgotten.
+
+**That reason has an expiry date, and publication is it.** Once the repository is public the
+raw URLs resolve for an unauthenticated client and `hacs/action` can do what it could not do
+here; restoring it is #29 in the private development archive, and
+`.github/workflows/validate.yml` carries the same note beside the job that is missing. These
+tests stay when it comes back rather than being replaced by it — they need no network and no
+repository at all, they run on every pull request including the ones that break the manifest,
+and the overlap is not duplication.
 """
 
 from __future__ import annotations

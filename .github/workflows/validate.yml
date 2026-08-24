@@ -28,16 +28,18 @@ jobs:
       # one tag on that repository (1.0.0) predates the action's current shape.
       - uses: home-assistant/actions/hassfest@master
 
-# There is no `hacs/action` job here, and that is a considered removal rather than an
-# omission. It was in this file first and could not do the job:
+# There is no `hacs/action` job here. That was a considered removal rather than an omission, and
+# it is now a TODO rather than a settled state — the condition that justified it has expired.
+# The history is kept because it is the argument for restoring the job *correctly*.
 #
 #   Its metadata checks go through the authenticated GitHub API, but every *file content*
 #   check downloads from https://raw.githubusercontent.com/{repo}/{ref}/{path} with no
 #   credentials. Those URLs therefore 404 for any repository the unauthenticated fetch
-#   cannot read, the download returns None, and the validator reports as invalid a file it
-#   never saw — a property of the action, not of the repository it is aimed at. That is what
-#   the first run here hit: it failed on exactly `hacsjson` and `integration_manifest` —
-#   the two content-based checks — while every tree- and metadata-based check passed.
+#   cannot read — which this one was, for the whole of the development that produced it. The
+#   download returns None, and the validator reports as invalid a file it never saw: a
+#   property of the action, not of the repository it is aimed at. That is what the first run
+#   here hit — it failed on exactly `hacsjson` and `integration_manifest`, the two
+#   content-based checks, while every tree- and metadata-based check passed.
 #
 # Ignoring those two would have left five of seven checks suppressed: a job that validates
 # almost nothing while looking like it validates something. So the checks moved to
@@ -45,5 +47,10 @@ jobs:
 # rules, on the actual files, with no network and no dependence on who can read the
 # repository. That file documents the trade.
 #
-# Restoring the job is worth it the moment those raw URLs resolve for an unauthenticated
-# client: it would then also cover `brands` and `license`, which a local test cannot.
+# **Publishing ends that condition**: an unauthenticated fetch resolves against a public
+# repository, so the action can do the job it could not do while this was private. Restoring it
+# is #29 in the private development archive — deliberately its own change rather than a line in
+# the publication, because a job either passes against the real repository or it does not, and
+# that is not knowable until the repository exists. It would then also cover `brands` and
+# `license`, which a local test cannot. tests/test_packaging.py stays either way: it runs offline
+# on every PR, and the two overlap rather than duplicate.

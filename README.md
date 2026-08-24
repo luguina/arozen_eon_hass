@@ -1,7 +1,7 @@
 # Arozen EON Pro 2 for Home Assistant
 
-[![CI](https://github.com/luguina/arozen_ha_controller/actions/workflows/ci.yml/badge.svg)](https://github.com/luguina/arozen_ha_controller/actions/workflows/ci.yml)
-[![Validate](https://github.com/luguina/arozen_ha_controller/actions/workflows/validate.yml/badge.svg)](https://github.com/luguina/arozen_ha_controller/actions/workflows/validate.yml)
+[![CI](https://github.com/luguina/arozen_eon_hass/actions/workflows/ci.yml/badge.svg)](https://github.com/luguina/arozen_eon_hass/actions/workflows/ci.yml)
+[![Validate](https://github.com/luguina/arozen_eon_hass/actions/workflows/validate.yml/badge.svg)](https://github.com/luguina/arozen_eon_hass/actions/workflows/validate.yml)
 
 A Home Assistant custom integration for the **Arozen EON Pro 2** cold-air scent diffuser.
 Power, intensity, timer, battery and charging — **locally over your LAN, with no Tuya cloud
@@ -43,7 +43,7 @@ against anything older.
 ### HACS (custom repository)
 
 1. HACS → ⋮ → **Custom repositories**
-2. Add `https://github.com/luguina/arozen_ha_controller`, category **Integration**
+2. Add `https://github.com/luguina/arozen_eon_hass`, category **Integration**
 3. Install **Arozen EON Pro 2 Diffuser**, then restart Home Assistant
 
 ### Manually
@@ -208,10 +208,10 @@ not the output — L1 mists every minute, L6 every forty. The entity labels say 
 **2. Turning it *on* resets intensity to L1 and the timer to 4 hours — the integration puts
 the intensity back.** The device does this itself on every power-**on**, whoever performs it —
 Home Assistant, the phone app, or the physical remote — and the phone app does not undo it
-either. The integration does ([#14](https://github.com/luguina/arozen_ha_controller/issues/14)): it remembers the level from ordinary polling
-and writes it back the moment it sees the device switched on. Immediately when Home Assistant
-is what turned it on, so `switch.turn_on` returns with the level already right; within one
-poll interval when the remote or the app did, so expect a few seconds at L1 first.
+either. The integration does (#14): it remembers the level from ordinary polling and writes it
+back the moment it sees the device switched on. Immediately when Home Assistant is what turned
+it on, so `switch.turn_on` returns with the level already right; within one poll interval when
+the remote or the app did, so expect a few seconds at L1 first.
 `sensor.…_intensity_restores` counts them and carries the error if one ever fails.
 
 **The timer is on you**, deliberately: an auto-off falling back to four hours is a safety
@@ -300,13 +300,16 @@ file with nothing in it.
 
 ## About the `local_key`
 
-> ⚠️ **This repository is private, and the thing that must never leave it is the Tuya
-> `local_key`.**
+> ⚠️ **The one thing that must never enter this repository is the Tuya `local_key`** — not in
+> a file, not in a capture, not truncated, not partially masked, not in a comment. It never
+> has, on any ref, and that is audited rather than assumed.
 
 It is not a device identifier — it is a **live credential**. It authenticates and encrypts
 local control, and anyone holding it plus LAN access can drive the diffuser. Home Assistant
 stores it in the config entry like any other integration secret, which is fine; a git
-repository is not.
+repository is not, and a public one least of all. That is why the rule is an absolute rather
+than a redaction practice: truncation is not redaction, it only narrows a search space, and a
+key that reaches a commit is compromised whether or not anyone noticed.
 
 | Artefact | Rule |
 |---|---|
@@ -337,9 +340,10 @@ all 70 rather than scanning for something that jumps out.
 **It scans the working tree only, and that is a different question from the one you are asking.**
 A file cleaned up at the tip still carries its old contents in every commit before the cleanup, so
 this sweep can report a clean repo while the value stays one `git log -p` away. That is not
-hypothetical here — it is exactly what
-[#20](https://github.com/luguina/arozen_ha_controller/issues/20) found. The companion, over every
-blob on every ref:
+hypothetical — it is exactly what #20 found in this project's development history, which is kept
+in the private archive rather than rewritten
+([ADR-007](docs/decisions.md#adr-007--do-not-rewrite-git-history-scrub-at-publication-on-a-fresh-repository)
+has the measurement behind that). The companion, over every blob on every ref:
 
 ```sh
 git grep -nIE 'bf[0-9a-z]{20}|"(local_)?key"' $(git rev-list --all) \
@@ -379,17 +383,17 @@ remember to run any of this.
 |---|---|
 | ✅ | Power, intensity, timer, battery, nozzle state, charging, LED — all mapped, write-verified against the device where writing is meaningful, and covered by tests |
 | ✅ | Config flow, options flow and all nine entities *as they stood on 2026-08-21* verified end to end against a real Home Assistant instance and the real diffuser |
-| ✅ | **What the phone app's power-off does that ours does not: nothing.** [#5](https://github.com/luguina/arozen_ha_controller/issues/5)'s remote walk settled it and overturned the premise — the reset belongs to the power-**on** edge, and the app loses intensity exactly like we do. Gotcha #2 above is the corrected version |
-| ✅ | **Intensity survives a power cycle** ([#14](https://github.com/luguina/arozen_ha_controller/issues/14)) — remembered from ordinary polling, written back on the on edge from any source, and never taught the firmware's default *by* the reading that carries the reset — which is what would otherwise restore L1 for ever. A power-on that reports some *other* level means a human got there first, and that one does teach. The countdown is armed on the same edge and is deliberately left alone ([ADR-006](docs/decisions.md#adr-006--correct-the-power-on-intensity-reset-and-only-that-one)) |
+| ✅ | **What the phone app's power-off does that ours does not: nothing.** #5's remote walk settled it and overturned the premise — the reset belongs to the power-**on** edge, and the app loses intensity exactly like we do. Gotcha #2 above is the corrected version |
+| ✅ | **Intensity survives a power cycle** (#14) — remembered from ordinary polling, written back on the on edge from any source, and never taught the firmware's default *by* the reading that carries the reset — which is what would otherwise restore L1 for ever. A power-on that reports some *other* level means a human got there first, and that one does teach. The countdown is armed on the same edge and is deliberately left alone ([ADR-006](docs/decisions.md#adr-006--correct-the-power-on-intensity-reset-and-only-that-one)) |
 | ✅ | **The restore is verified on the real diffuser** (2026-08-21), from both directions: Home Assistant's own switch, where L4 was back before the turn-on call returned, and the **physical remote**, where it came back on the following poll. The guard holds too — switch on with the remote and press intensity, and the level you chose survives untouched. Fifteen checks, two restores, no failures. The restore *counter* is what proves the firmware did reset it, because a restore only fires when the device reports L1 on the on edge |
 | ✅ | The **entity wiring** is verified too, in a throwaway Home Assistant driven over its own REST API: the config flow validates and creates the entry, exactly the eleven entities listed above appear and nothing beyond them, and after `switch.turn_off` / `switch.turn_on` the intensity select still reads `L4 · every 10 min` with the restores sensor at 1 and `remembered_level: L4`. **23/23, 2026-08-22** |
-| ✅ | **DP 102 is charging status** (`zzcd`/`wcd`/`cdwc` — 正在充电 / 未充电 / 充电完成) and is now the tenth entity ([#16](https://github.com/luguina/arozen_ha_controller/issues/16)). It was never reachable by pressing buttons — the stimulus is a cable, not a control — which is why an entire remote walk went past it. `cdwc` was confirmed on the device 2026-08-22, on the cable at 100 % |
-| ✅ | **DP 7 is the frontal LED, and it is a command DP** ([#15](https://github.com/luguina/arozen_ha_controller/issues/15)) — write-verified 2026-08-22, both directions, each holding across five reads over 30 seconds. That duration is the test, not the acceptance: DP 103 accepts writes and then reverts them at the end of a burst, so 30 s spans the window in which a revert would have shown. Had it snapped back this would have shipped as a read-only sensor. The device also moves DP 7 by itself on some power cycles, and the integration reports that rather than fighting it — no memory, no restore, deliberately unlike intensity ([ADR-006](docs/decisions.md#adr-006--correct-the-power-on-intensity-reset-and-only-that-one)) |
+| ✅ | **DP 102 is charging status** (`zzcd`/`wcd`/`cdwc` — 正在充电 / 未充电 / 充电完成) and is now the tenth entity (#16). It was never reachable by pressing buttons — the stimulus is a cable, not a control — which is why an entire remote walk went past it. `cdwc` was confirmed on the device 2026-08-22, on the cable at 100 % |
+| ✅ | **DP 7 is the frontal LED, and it is a command DP** (#15) — write-verified 2026-08-22, both directions, each holding across five reads over 30 seconds. That duration is the test, not the acceptance: DP 103 accepts writes and then reverts them at the end of a burst, so 30 s spans the window in which a revert would have shown. Had it snapped back this would have shipped as a read-only sensor. The device also moves DP 7 by itself on some power cycles, and the integration reports that rather than fighting it — no memory, no restore, deliberately unlike intensity ([ADR-006](docs/decisions.md#adr-006--correct-the-power-on-intensity-reset-and-only-that-one)) |
 | ✅ | **The charging sensor and the LED switch have now been through `tools/verify_ha.py`** — 23/23 on 2026-08-22, the first run covering either. Until then both rested on unit tests and well-attested DPs alone; that gap is closed, and the harness confirms nothing beyond the eleven entities appears. It power-cycles the real diffuser, so a re-run stays a deliberate act rather than something to do in passing |
 | ❓ | **DP 104** (`kk`) is the last unidentified datapoint. It has not moved through an app walk, a remote walk, an LED toggle or a charger event; a firmware constant is the leading explanation. The `datapoints_recon` diagnostic sensor watches it, and gets deleted once it is named |
 | ⏸️ | Whether the phone app has to keep working alongside Home Assistant ([ADR-004](docs/decisions.md#adr-004--pending--must-the-phone-app-keep-working)) |
-| ✅ | **The repo's own redaction rule holds in the tree, and is enforced there** ([#20](https://github.com/luguina/arozen_ha_controller/issues/20)). One device id, in dossier §6.2; two other appliances' ids out of the dossier entirely; `tests/test_redaction_rule.py` fails the build on a regression instead of waiting for somebody to run the audit sweep. The identifiers stay in **git history**, deliberately — a force-push would clean `main` and would *not* clean the `refs/pull/*/head` that GitHub keeps for every PR, so it is the expensive half of a fix that does not fix the thing it is for ([ADR-007](docs/decisions.md#adr-007--do-not-rewrite-git-history-scrub-at-publication-on-a-fresh-repository) has the measurement, and the publication route that does work). The `local_key` has never been committed, on any ref — audited, clean |
-| ✅ | **The diagnostics dump is the one artefact designed to leave the machine, and it leaves without the credential** ([#46](https://github.com/luguina/arozen_ha_controller/issues/46)). Redacted twice, because there are two ways in: by key name out of the config entry, and by substring out of the error strings, where `device.py`'s `f"{host}: … failed"` puts a LAN address that no key-based redactor can see. The tests assert the values are absent from the serialised dump, not that the output has a particular shape |
+| ✅ | **The repo's own redaction rule holds in the tree, and is enforced there** (#20). One device id, in dossier §6.2; two other appliances' ids out of the dossier entirely; `tests/test_redaction_rule.py` fails the build on a regression instead of waiting for somebody to run the audit sweep. The identifiers stay in the **git history of the private archive**, deliberately — a force-push there would clean `main` and would *not* clean the `refs/pull/*/head` that GitHub keeps for every PR, so it is the expensive half of a fix that does not fix the thing it is for ([ADR-007](docs/decisions.md#adr-007--do-not-rewrite-git-history-scrub-at-publication-on-a-fresh-repository) has the measurement, and the publication route that does work). The `local_key` has never been committed, on any ref — audited, clean |
+| ✅ | **The diagnostics dump is the one artefact designed to leave the machine, and it leaves without the credential** (#46). Redacted twice, because there are two ways in: by key name out of the config entry, and by substring out of the error strings, where `device.py`'s `f"{host}: … failed"` puts a LAN address that no key-based redactor can see. The tests assert the values are absent from the serialised dump, not that the output has a particular shape |
 
 The honest version, with evidence and everything still unknown, is
 [docs/datapoints.md](docs/datapoints.md).
@@ -451,3 +455,12 @@ Design decisions are recorded as ADRs in [`docs/decisions.md`](docs/decisions.md
 tools and their rules are in [`tools/README.md`](tools/README.md); `tests/test_dp.py` runs
 against `dp.py` alone with no Home Assistant installed, which makes it the cheapest place to
 pin a fact about the device.
+
+**A `#NN` in these files is an issue or pull request in this project's development archive** — the
+private repository where the recon, the arguments and the review record happened, and where they
+stay. They are written as plain text and never as links, because the archive is not readable from
+the published repository and its numbers do not correspond to anything there: a link would 404,
+and a number rewritten to match would point at something real and wrong, which is the worse of the
+two failures because nothing about it invites checking. Add new ones the same way.
+[ADR-007](docs/decisions.md#adr-007--do-not-rewrite-git-history-scrub-at-publication-on-a-fresh-repository)
+has the reasoning, and the test to apply before making a reference a live link.
