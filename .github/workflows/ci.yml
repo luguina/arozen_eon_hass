@@ -100,5 +100,20 @@ jobs:
       - name: ruff
         run: ruff check .
 
+      # `--cov` is passed here rather than set in pyproject's `addopts`, deliberately: a
+      # bare `pytest` has to keep working in an environment that has no pytest-cov, and
+      # `addopts` would turn its absence into "unrecognized arguments" rather than a
+      # missing report.
+      #
+      # `--cov-fail-under` is a floor, not a ratchet. Coverage was 91% when it was set to
+      # 85, and the gap is intentional: a ratchet set to the current number turns an
+      # unrelated pull request red for a one-line wobble, which teaches people to raise the
+      # threshold rather than to look. What this catches is the failure that motivated the
+      # report at all — a module dropping out of the suite entirely, which moves the number
+      # by far more than the slack.
       - name: pytest
-        run: pytest
+        run: >
+          pytest
+          --cov=custom_components/arozen_eon
+          --cov-report=term-missing
+          --cov-fail-under=85
