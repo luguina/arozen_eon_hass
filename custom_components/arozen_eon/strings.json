@@ -40,5 +40,11 @@
         }
       }
     }
+  },
+  "issues": {
+    "device_unreachable": {
+      "title": "The diffuser at {host} has stopped answering",
+      "description": "No poll has succeeded for over {minutes} minutes — {failures} consecutive attempts. Two different things produce exactly this, and Home Assistant cannot tell them apart from here:\n\n1. **The diffuser is off, asleep, or off the network.** Check that it has power, and that `{host}` is still its address — a DHCP lease can move it.\n2. **It was re-paired in the Smart Life app.** Re-pairing mints a new local key and the old one stops decrypting immediately. The device ID survives; the key does not.\n\nIf it is powered on and on the network, the second one is the answer: **Settings → Devices & Services → Arozen EON Pro 2 → ⋮ → Reconfigure**. The new IP address, local key and protocol version are tried against the device before anything is saved, so a wrong value leaves the entry exactly as it was. The entry keeps its identity, which is why this is not \"delete it and add it again\" — your automations and entity IDs survive.\n\nThis card clears itself the moment one poll succeeds."
+    }
   }
 }

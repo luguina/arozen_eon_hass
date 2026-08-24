@@ -185,6 +185,14 @@ Removing the device from the app and adding it back **mints a new `local_key`**.
 survives; the key does not. Home Assistant will then fail every poll, with the reason on
 `sensor.…_failed_polls`.
 
+**After an hour of silence a card appears in Settings → System → Repairs** (#49) and points you
+back here. It deliberately does *not* claim the key is at fault: on this protocol a key that no
+longer decrypts and a diffuser that is simply unplugged produce the identical error payload, so
+the card names both causes and leaves you to settle which
+([ADR-008](docs/decisions.md#adr-008--never-assert-a-cause-the-transport-cannot-distinguish)).
+It clears itself the moment one poll succeeds. An hour is deliberately unhurried — a router
+reboot should not put a card on your screen, and a card you learn to ignore is worse than none.
+
 The fix is **Settings → Devices & Services → Arozen EON Pro 2 → ⋮ → Reconfigure**, which takes a
 new IP address, local key and protocol version and tries them against the device before saving
 anything. The entry keeps its identity, so your automations and entity ids survive — which is the
@@ -280,7 +288,10 @@ Every failure here looks the same from the dashboard: the entities go `unavailab
 local key, a wrong protocol version and a diffuser that has fallen asleep are three different
 problems with one symptom, so the state worth having is the state you cannot see — which
 protocol version is actually in use, how many polls have failed in a row, and what tinytuya
-answered with.
+answered with. A silence lasting more than an hour also raises a Repairs card naming the two
+likeliest causes, which is the same restraint expressed as a notification rather than a
+paragraph — see [Re-pairing the diffuser invalidates the
+key](#re-pairing-the-diffuser-invalidates-the-key).
 
 **Settings → Devices & Services → Arozen EON Pro 2 → ⋮ → Download diagnostics.** A JSON file
 with the poll health, the intensity memory, the raw datapoints and the connection settings.
@@ -390,6 +401,7 @@ remember to run any of this.
 | ✅ | **DP 102 is charging status** (`zzcd`/`wcd`/`cdwc` — 正在充电 / 未充电 / 充电完成) and is now the tenth entity (#16). It was never reachable by pressing buttons — the stimulus is a cable, not a control — which is why an entire remote walk went past it. `cdwc` was confirmed on the device 2026-08-22, on the cable at 100 % |
 | ✅ | **DP 7 is the frontal LED, and it is a command DP** (#15) — write-verified 2026-08-22, both directions, each holding across five reads over 30 seconds. That duration is the test, not the acceptance: DP 103 accepts writes and then reverts them at the end of a burst, so 30 s spans the window in which a revert would have shown. Had it snapped back this would have shipped as a read-only sensor. The device also moves DP 7 by itself on some power cycles, and the integration reports that rather than fighting it — no memory, no restore, deliberately unlike intensity ([ADR-006](docs/decisions.md#adr-006--correct-the-power-on-intensity-reset-and-only-that-one)) |
 | ✅ | **The charging sensor and the LED switch have now been through `tools/verify_ha.py`** — 23/23 on 2026-08-22, the first run covering either. Until then both rested on unit tests and well-attested DPs alone; that gap is closed, and the harness confirms nothing beyond the eleven entities appears. It power-cycles the real diffuser, so a re-run stays a deliberate act rather than something to do in passing |
+| ✅ | **A rotated local key no longer fails silently** (#49). Re-pairing in the app mints a new key, the old one stops decrypting immediately, and until now the entire user-facing consequence was `unavailable` entities and a climbing counter — the remedy existed and nothing pointed at it. An hour of silence now raises a repair card that names both plausible causes and asserts neither, because on this transport a dead key and a dead battery are the same error payload; the conventional `ConfigEntryAuthFailed` would have told users with an unplugged diffuser that their credentials were wrong ([ADR-008](docs/decisions.md#adr-008--never-assert-a-cause-the-transport-cannot-distinguish)). The threshold is wall clock rather than a count of polls, because the poll interval is a user setting spanning 10 s to 3600 s |
 | ❓ | **DP 104** (`kk`) is the last unidentified datapoint. It has not moved through an app walk, a remote walk, an LED toggle or a charger event; a firmware constant is the leading explanation. The `datapoints_recon` diagnostic sensor watches it, and gets deleted once it is named |
 | ⏸️ | Whether the phone app has to keep working alongside Home Assistant ([ADR-004](docs/decisions.md#adr-004--pending--must-the-phone-app-keep-working)) |
 | ✅ | **The repo's own redaction rule holds in the tree, and is enforced there** (#20). One device id, in dossier §6.2; two other appliances' ids out of the dossier entirely; `tests/test_redaction_rule.py` fails the build on a regression instead of waiting for somebody to run the audit sweep. The identifiers stay in the **git history of the private archive**, deliberately — a force-push there would clean `main` and would *not* clean the `refs/pull/*/head` that GitHub keeps for every PR, so it is the expensive half of a fix that does not fix the thing it is for ([ADR-007](docs/decisions.md#adr-007--do-not-rewrite-git-history-scrub-at-publication-on-a-fresh-repository) has the measurement, and the publication route that does work). The `local_key` has never been committed, on any ref — audited, clean |

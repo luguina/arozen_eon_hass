@@ -394,6 +394,56 @@ test.
 
 ---
 
+## ADR-008 — Never assert a cause the transport cannot distinguish
+
+**Status:** accepted · **Date:** 2026-08-24
+
+**Context.** Home Assistant has a well-worn answer for "the credentials stopped working": raise
+`ConfigEntryAuthFailed` from the coordinator and let the framework open a reauth flow. It is the
+right shape for a cloud API, where a 401 and a 503 are different answers to the same request.
+
+The Tuya local protocol does not offer that distinction. A `local_key` that no longer decrypts —
+which is exactly what re-pairing in the Smart Life app produces — comes back as an error payload
+shaped like `{"Error": …, "Err": "914"}`. So does a diffuser that is powered off. So does one
+asleep, one that a DHCP lease has moved to another address, and one holding its single local
+connection open for the phone app (ADR-004). `device.py` collapses all of them into
+`ArozenUnreachable` **because they are not distinguishable at that layer**, not because it has
+not tried.
+
+**Decision.** The integration **never puts a cause in front of the user that the transport cannot
+establish.** For the rotated key (#49) that means a repair issue in Settings → System → Repairs,
+raised after an hour of silence and retired by the first successful exchange — and specifically
+*not* `ConfigEntryAuthFailed`, and not a reauth flow.
+
+**Why that follows rather than being a matter of taste.** A reauth flow is an accusation with a
+UI attached. It tells the user their credentials are wrong and puts a form in front of them, and
+the most common reason this device stops answering is that somebody unplugged it. Getting that
+wrong is not a cosmetic failure: it sends a person to re-enter a key that was never the problem,
+teaches them the integration guesses, and leaves the actual cause — no power — unmentioned on the
+one screen they were looking at.
+
+**What makes the repair issue admissible where the reauth flow is not** is that it does not have
+to name a cause at all. It can state the observation, which is true — this device has not
+answered for an hour — then name both states that produce it and give the remedy for one and the
+check for the other. Both branches, one card, no false accusation. The words are held to that by
+a test that reads the shipped string (`tests/test_repair_issue.py`), because this is a property
+of the *text* and text drifts in a way code does not.
+
+**Scope, deliberately wider than one card.** The same rule decides anything else that would put a
+cause on screen: an entity that reports "credentials invalid", an error string in the config flow
+that blames the key rather than the exchange, a future `ConfigEntryAuthFailed` added for a
+different symptom. If the transport cannot tell two causes apart, neither may the user interface.
+The README's *When it misbehaves* section already worked this way — "a wrong local key, a wrong
+protocol version and a diffuser that has fallen asleep are three different problems with one
+symptom" — and this ADR is that observation promoted to a rule.
+
+**What would change the answer.** A firmware or tinytuya release that gives a decryption failure
+a shape distinguishable from a timeout. The premise here is a measured property of the transport,
+not a preference, so the day it stops being true, `ConfigEntryAuthFailed` becomes the better
+answer and this entry should be superseded rather than argued with.
+
+---
+
 ## Pending
 
 | # | Decision | Blocked on |

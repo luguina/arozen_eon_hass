@@ -40,3 +40,27 @@ MAX_POLL_INTERVAL_S: Final = 3600
 #: last reading in between. Same shape as sibling_beacon's TOLERATED_POLL_FAILURES and for the
 #: same reason: one missed poll should not cost a full interval of unavailability.
 TOLERATED_POLL_FAILURES: Final = 1
+
+#: How long the device must go on not answering before a repair issue appears in
+#: **Settings → System → Repairs** (#49). Wall clock, not a poll count, and the difference is
+#: not pedantry: the poll interval is configurable across a 360x range, so the same count is
+#: ten minutes for one installation and two and a half days for another. What this trades is
+#: patience against noise, and both are measured in time — a router reboot, a DHCP renewal or
+#: a firmware update takes minutes, so anything much shorter puts a card on the screen for
+#: every one of them and teaches the user to ignore the card.
+#:
+#: An hour is the deliberately unhurried end of that trade. The entities have already gone
+#: `unavailable` after TOLERATED_POLL_FAILURES, which is the fast signal; this is the slow one
+#: that says the silence is not going to end on its own.
+UNREACHABLE_BEFORE_REPAIR_S: Final = 3600
+
+#: Where the repair card's "Learn more" button goes: the README section that explains what
+#: re-pairing does to the key and how to reconfigure. Built on the manifest's `documentation`
+#: URL rather than repeating it, because a repository rename must move both together, and
+#: tests/test_repair_issue.py holds it to that — it checks the prefix against the manifest and
+#: the fragment against a heading that actually exists in README.md. A "Learn more" button
+#: landing on a 404, or scrolling to nowhere, is worse than no button.
+REPAIR_LEARN_MORE_URL: Final = (
+    "https://github.com/luguina/arozen_eon_hass"
+    "#re-pairing-the-diffuser-invalidates-the-key"
+)

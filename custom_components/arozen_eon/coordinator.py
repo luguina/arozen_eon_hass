@@ -4,12 +4,18 @@ Simpler than the sibling project's coordinator in the ways the transport is simp
 arbitration (the Tuya device holds one flat DP set, not four schedule records) and no presence
 tracking (there is no advertisement to watch — "is it there" is "did the TCP poll answer").
 
-Two things it does hold, and both are here because the device erases evidence on its own:
+Three things it does hold, and the first two are here because the device erases evidence on
+its own:
 
 * **health counting** — tolerated poll failures and a total-failure counter, exported as a
   diagnostic sensor so a tolerated miss still leaves a trace. See PollHealth.
 * **an intensity memory** — the firmware clears intensity to L1 on every power-on and nothing
   on the device or in the vendor app puts it back. See IntensityMemory.
+* **a repair issue** — a device that has stopped answering for an hour gets a card in
+  Settings → System → Repairs, because the two states that produce that silence (unplugged,
+  or re-paired so the local key no longer decrypts) are indistinguishable at this layer and
+  only one of them has a fix the user can perform. See _raise_unreachable_issue, and ADR-008
+  for why this is a repair issue rather than a reauth flow.
 
 An earlier revision of this docstring claimed there was "no intensity memory (intensity is a
 DP the device keeps, not a value off erases)". Wrong in both halves, and wrong the same way
@@ -23,16 +29,24 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
 from . import dp
-from .const import DEFAULT_POLL_INTERVAL_S, DOMAIN, TOLERATED_POLL_FAILURES
+from .const import (
+    DEFAULT_POLL_INTERVAL_S,
+    DOMAIN,
+    REPAIR_LEARN_MORE_URL,
+    TOLERATED_POLL_FAILURES,
+    UNREACHABLE_BEFORE_REPAIR_S,
+)
 from .device import ArozenDevice, ArozenError
 
 _LOGGER = logging.getLogger(__name__)
@@ -60,16 +74,47 @@ class PollHealth:
         self.total = 0
         self.last_error: str | None = None
         self.last_failure: datetime | None = None
+        #: ``time.monotonic()`` when the current run of failures *started*, or None if the
+        #: last exchange worked. Deliberately not ``last_failure``, which holds the most recent
+        #: one: the two answer different questions — "when did we last try and fail" versus
+        #: "how long has this been going on" — and only the second can tell a router reboot
+        #: from a local key that is never going to work again (#49).
+        #:
+        #: Monotonic rather than ``dt_util.now()``, unlike every other timestamp in this class,
+        #: because this one is only ever subtracted and the others are only ever displayed. A
+        #: Home Assistant box with no real-time clock — a Raspberry Pi, which is most of them —
+        #: boots at the epoch and jumps decades forward when NTP answers. A wall-clock
+        #: subtraction across that jump reports fifty years of silence and raises a repair card
+        #: on the second failed poll of the day.
+        self.unreachable_since_monotonic: float | None = None
 
     def failed(self, error: str) -> None:
         self.consecutive += 1
         self.total += 1
         self.last_error = error
         self.last_failure = dt_util.now()
+        if self.unreachable_since_monotonic is None:
+            self.unreachable_since_monotonic = time.monotonic()
 
     def succeeded(self) -> None:
         """A fresh reading, from a poll or a write — both prove the link works."""
         self.consecutive = 0
+        self.unreachable_since_monotonic = None
+
+    def unreachable_for_at_least(self, seconds: int) -> bool:
+        """Whether the current run of failures has lasted at least ``seconds`` of wall clock.
+
+        False when the last exchange worked, and false on the *first* failure of a run — the
+        run is zero seconds old at that moment, which is both the honest answer and the one
+        that stops a single missed poll from meaning anything.
+
+        Elapsed time rather than a count of failures, because the poll interval is a user
+        setting spanning 10 s to 3600 s and a count means wildly different things across that
+        range. See UNREACHABLE_BEFORE_REPAIR_S.
+        """
+        if self.unreachable_since_monotonic is None:
+            return False
+        return time.monotonic() - self.unreachable_since_monotonic >= seconds
 
     @property
     def may_hold_reading(self) -> bool:
@@ -217,6 +262,13 @@ class ArozenCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         #: as though it were a choice. Many Tuya devices accept only one local connection at a
         #: time anyway (ADR-004), so serialising costs nothing we were getting.
         self._exchange = asyncio.Lock()
+        #: Whether this run has a repair card on screen. Kept here rather than asked of the
+        #: issue registry every poll, so the card is created once per outage instead of
+        #: re-created every 60 s — and so "was it raised twice" is a question with an answer.
+        #: A restart resets it to False and cannot strand a stale card: Home Assistant
+        #: restores non-persistent issues with ``active=False``, so a card nobody re-creates
+        #: is already invisible (helpers/issue_registry.py, ``_async_load``).
+        self._unreachable_issue_raised = False
 
     async def _async_update_data(self) -> dict[str, Any]:
         async with self._exchange:
@@ -224,13 +276,20 @@ class ArozenCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 dps = await self.device.async_status()
             except ArozenError as err:
                 self.health.failed(str(err))
+                self._raise_unreachable_issue()
                 raise UpdateFailed(str(err)) from err
             except Exception as err:  # re-raised immediately
                 # Not an ArozenError means a bug, not a flaky link — but it still has to break
                 # the streak, or every entity would sit available on a frozen reading forever.
+                #
+                # No repair card from here, deliberately. The card tells the user to check the
+                # power and the network or to reconfigure the key, and none of that is the
+                # remedy for a TypeError in our own code. The failure still counts, because
+                # `Failed polls` counts failures; only the advice is withheld.
                 self.health.failed(f"{type(err).__name__}: {err}")
                 raise
             self.health.succeeded()
+            self._clear_unreachable_issue()
             return await self._async_apply_intensity_memory(dps)
 
     async def async_set_dp(self, dp_id: int, value: Any) -> None:
@@ -238,6 +297,7 @@ class ArozenCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         async with self._exchange:
             await self.device.async_set_dp(dp_id, value)
             self.health.succeeded()
+            self._clear_unreachable_issue()
             if dp_id == dp.DP_INTENSITY and isinstance(value, str):
                 # The user has just said what they want. Recorded here rather than in
                 # select.py so the entity layer stays ignorant of the memory, and recorded on
@@ -337,3 +397,77 @@ class ArozenCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self.data is None:
             return False
         return dp.get(self.data, dp.DP_POWER) is False and dp.get(dps, dp.DP_POWER) is True
+
+    @property
+    def _unreachable_issue_id(self) -> str:
+        """One card per config entry, not one per integration.
+
+        Two diffusers on one Home Assistant would otherwise share a card, and the first one to
+        come back would clear the other's — which is the sort of bug that only ever appears in
+        somebody else's install.
+        """
+        return f"device_unreachable_{self.config_entry.entry_id}"
+
+    def _raise_unreachable_issue(self) -> None:
+        """Put a card in Settings → System → Repairs once the silence has gone on long enough.
+
+        **Why this is not `ConfigEntryAuthFailed` and a reauth flow**, which is the answer Home
+        Assistant conventions point at and the wrong one here. On the Tuya local protocol a
+        local key that no longer decrypts produces the same error payload as a device that is
+        powered off, asleep, or holding its single local connection open for the phone app
+        (ADR-004). `device.py` collapses all of them into ArozenUnreachable because **they are
+        genuinely not distinguishable at that layer** — not because it has not tried. Raising
+        ConfigEntryAuthFailed would put "credentials are invalid" in front of a user whose
+        diffuser is merely unplugged, and send them to re-enter a key that was never wrong.
+
+        A repair issue does not have that problem, because **it does not have to claim a
+        cause.** It can say the true thing — the device has not answered for an hour, here are
+        the two states that produce that, here is the fix for one of them and the check for the
+        other — and let the person holding the diffuser settle which. ADR-008 records the wider
+        rule: this integration never asserts a cause the transport cannot distinguish.
+
+        Raised at most once per outage, and only after UNREACHABLE_BEFORE_REPAIR_S. The
+        entities have been `unavailable` since the second failed poll; this is the slower,
+        louder signal that the silence is not going to end on its own.
+        """
+        if self._unreachable_issue_raised:
+            return
+        if not self.health.unreachable_for_at_least(UNREACHABLE_BEFORE_REPAIR_S):
+            return
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            self._unreachable_issue_id,
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="device_unreachable",
+            translation_placeholders={
+                "host": self.device.host,
+                "minutes": str(UNREACHABLE_BEFORE_REPAIR_S // 60),
+                "failures": str(self.health.consecutive),
+            },
+            learn_more_url=REPAIR_LEARN_MORE_URL,
+        )
+        self._unreachable_issue_raised = True
+        _LOGGER.warning(
+            "%s has not answered for %d minutes (%d consecutive polls). Either it is off or "
+            "off the network, or it was re-paired in the Smart Life app and the local key has "
+            "changed — see Settings > System > Repairs. Last error: %s",
+            self.device.host,
+            UNREACHABLE_BEFORE_REPAIR_S // 60,
+            self.health.consecutive,
+            self.health.last_error,
+        )
+
+    def _clear_unreachable_issue(self) -> None:
+        """One successful exchange retires the card, from either path.
+
+        A poll and a write are equally good proof: both mean the key decrypted and the device
+        answered, which is the entire claim the card was making. Guarded on the flag so the
+        common case — a device that has been fine for months — never touches the registry.
+        """
+        if not self._unreachable_issue_raised:
+            return
+        ir.async_delete_issue(self.hass, DOMAIN, self._unreachable_issue_id)
+        self._unreachable_issue_raised = False
+        _LOGGER.info("%s is answering again; repair issue cleared", self.device.host)

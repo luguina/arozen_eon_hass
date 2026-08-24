@@ -210,10 +210,13 @@ def make_coordinator(
 ) -> ArozenCoordinator:
     """An ArozenCoordinator carrying only the parts these tests touch.
 
-    The real constructor needs a running Home Assistant. The methods under test read four
-    attributes - the device, the memory, the previous DP set and the exchange lock - so the
-    shell is built explicitly rather than mocked: a method that grows a fifth dependency
-    fails here with AttributeError instead of quietly passing against a permissive mock.
+    The real constructor needs a running Home Assistant. The methods under test read five
+    attributes - the device, the memory, the previous DP set, the exchange lock and the repair
+    card's flag - so the shell is built explicitly rather than mocked: a method that grows a
+    sixth dependency fails here with AttributeError instead of quietly passing against a
+    permissive mock. That has already happened once, which is the argument for the idiom: #49
+    added a `_clear_unreachable_issue()` call to the write path and these tests broke, rather
+    than passing while exercising a coordinator no production code resembles.
 
     ``async_set_updated_data`` is the one piece of real coordinator machinery in the path, and
     it is replaced by a list so a test can assert on what would have reached the entities.
@@ -233,6 +236,11 @@ def make_coordinator(
         coordinator.intensity.observe(remembers)
     coordinator.data = data
     coordinator._exchange = asyncio.Lock()
+    #: The write path retires the repair card on a successful write (#49). Nothing here raises
+    #: one, so False is both the honest starting state and the value that keeps these tests
+    #: away from the issue registry entirely - the guard in `_clear_unreachable_issue` returns
+    #: before touching it. `tests/test_repair_issue.py` is where the card itself is tested.
+    coordinator._unreachable_issue_raised = False
     coordinator.published = []
     coordinator.async_set_updated_data = coordinator.published.append
     return coordinator
