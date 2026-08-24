@@ -69,8 +69,23 @@ class ArozenDevice:
         self._dps_or_raise(payload, f"set DP {dp} = {value!r}")
 
     def _dps_or_raise(self, payload: Any, what: str) -> dict[str, Any]:
-        """Unpack a tinytuya response, translating its error shapes into one exception."""
-        if isinstance(payload, dict) and "dps" in payload:
+        """Unpack a tinytuya response, translating its error shapes into one exception.
+
+        The test is on the *value* of ``dps``, not merely on the key being present, and the
+        difference is load-bearing. tinytuya can answer with the key set to something that
+        is not a mapping — its own code defends against exactly that, checking
+        ``isinstance(response['dps'], dict)`` in ``BulbDevice`` and
+        ``src[k] and isinstance(src[k], dict)`` in ``merge_dps_results`` — and a key-presence
+        check hands that value straight back as though it were a reading.
+
+        The consequence was worse than a crash, because it was scored as a success first:
+        the coordinator calls ``health.succeeded()`` on anything this method returns, so a
+        device replying with a null ``dps`` reset the failure streak, and the AttributeError
+        it then caused in ``dp.get`` was raised *outside* the block that records a failure.
+        Every poll failed, the log filled with tracebacks, and `Failed polls` — the sensor
+        whose whole purpose is to make a tolerated failure visible — read zero.
+        """
+        if isinstance(payload, dict) and isinstance(payload.get("dps"), dict):
             _LOGGER.debug("%s: %s -> %s", self.host, what, payload["dps"])
             return payload["dps"]
         # tinytuya's favourite failure mode: an error dict instead of an exception.
