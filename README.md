@@ -16,7 +16,7 @@ creates nothing. The datapoints are there; they just had to be found by hand.
 
 ## What you get
 
-Eleven entities, on one device:
+Ten entities on one device, and an eleventh that ships switched off:
 
 | Entity | What it is |
 |---|---|
@@ -30,7 +30,15 @@ Eleven entities, on one device:
 | `sensor.arozen_eon_pro_2_timer_remaining` | **Minutes left** on the auto-off countdown |
 | `sensor.arozen_eon_pro_2_failed_polls` | Diagnostic: polls that failed, with the last error |
 | `sensor.arozen_eon_pro_2_intensity_restores` | Diagnostic: times the power-on intensity reset was undone, and any that failed — see gotcha 2 |
-| `sensor.arozen_eon_pro_2_datapoints_recon` | Diagnostic: the raw datapoints. Scaffolding — see [Status](#status) |
+| `sensor.arozen_eon_pro_2_datapoints_recon` | Diagnostic: the raw datapoints. **Disabled by default** — recon scaffolding, see below |
+
+The last row is the exception and is off on a fresh install: it reports a *count* of Tuya
+datapoints with the raw payload in its attributes, which is the instrument that mapped this
+device and is of no use once the map exists. It is still the only live view of the raw
+datapoints, so it is disabled rather than removed — enable it under **Settings → Devices &
+services → Arozen EON Pro 2 → the entity → ⚙ → Enabled** and Home Assistant reloads the
+integration itself. (A [diagnostics download](#when-it-misbehaves) carries the same
+datapoints as a one-off snapshot, without enabling anything.)
 
 The device diffuses in **bursts**: 30 seconds of mist, then a pause. The intensity level sets
 the pause, which is why the entity is labelled the way it is.
@@ -255,7 +263,8 @@ has **not** been observed — do not build an automation that depends on either 
 **4. The Misting sensor reads `off` whenever the power is off — deliberately.** The device
 *freezes* that datapoint when it stops: switch it off mid-burst and it keeps reporting "nozzle
 open" indefinitely. The integration refuses to read a frozen register as a live one. The raw
-value is still visible on the diagnostic datapoints sensor if you want it.
+value is still visible on the diagnostic datapoints sensor if you want it — that one ships
+disabled, see [What you get](#what-you-get).
 
 **5. `Charging` flips on and off while the diffuser runs on mains, and `Charging: off` does
 not mean unplugged.** Two separate surprises in one entity, both the firmware's:
@@ -397,12 +406,13 @@ remember to run any of this.
 | ✅ | **What the phone app's power-off does that ours does not: nothing.** #5's remote walk settled it and overturned the premise — the reset belongs to the power-**on** edge, and the app loses intensity exactly like we do. Gotcha #2 above is the corrected version |
 | ✅ | **Intensity survives a power cycle** (#14) — remembered from ordinary polling, written back on the on edge from any source, and never taught the firmware's default *by* the reading that carries the reset — which is what would otherwise restore L1 for ever. A power-on that reports some *other* level means a human got there first, and that one does teach. The countdown is armed on the same edge and is deliberately left alone ([ADR-006](docs/decisions.md#adr-006--correct-the-power-on-intensity-reset-and-only-that-one)) |
 | ✅ | **The restore is verified on the real diffuser** (2026-08-21), from both directions: Home Assistant's own switch, where L4 was back before the turn-on call returned, and the **physical remote**, where it came back on the following poll. The guard holds too — switch on with the remote and press intensity, and the level you chose survives untouched. Fifteen checks, two restores, no failures. The restore *counter* is what proves the firmware did reset it, because a restore only fires when the device reports L1 on the on edge |
-| ✅ | The **entity wiring** is verified too, in a throwaway Home Assistant driven over its own REST API: the config flow validates and creates the entry, exactly the eleven entities listed above appear and nothing beyond them, and after `switch.turn_off` / `switch.turn_on` the intensity select still reads `L4 · every 10 min` with the restores sensor at 1 and `remembered_level: L4`. **23/23, 2026-08-22** |
+| ✅ | The **entity wiring** is verified too, in a throwaway Home Assistant driven over its own REST API: the config flow validates and creates the entry, exactly the eleven entities that were enabled by default *on that date* appear and nothing beyond them, and after `switch.turn_off` / `switch.turn_on` the intensity select still reads `L4 · every 10 min` with the restores sensor at 1 and `remembered_level: L4`. **23/23, 2026-08-22** |
 | ✅ | **DP 102 is charging status** (`zzcd`/`wcd`/`cdwc` — 正在充电 / 未充电 / 充电完成) and is now the tenth entity (#16). It was never reachable by pressing buttons — the stimulus is a cable, not a control — which is why an entire remote walk went past it. `cdwc` was confirmed on the device 2026-08-22, on the cable at 100 % |
 | ✅ | **DP 7 is the frontal LED, and it is a command DP** (#15) — write-verified 2026-08-22, both directions, each holding across five reads over 30 seconds. That duration is the test, not the acceptance: DP 103 accepts writes and then reverts them at the end of a burst, so 30 s spans the window in which a revert would have shown. Had it snapped back this would have shipped as a read-only sensor. The device also moves DP 7 by itself on some power cycles, and the integration reports that rather than fighting it — no memory, no restore, deliberately unlike intensity ([ADR-006](docs/decisions.md#adr-006--correct-the-power-on-intensity-reset-and-only-that-one)) |
-| ✅ | **The charging sensor and the LED switch have now been through `tools/verify_ha.py`** — 23/23 on 2026-08-22, the first run covering either. Until then both rested on unit tests and well-attested DPs alone; that gap is closed, and the harness confirms nothing beyond the eleven entities appears. It power-cycles the real diffuser, so a re-run stays a deliberate act rather than something to do in passing |
+| ✅ | **The charging sensor and the LED switch have now been through `tools/verify_ha.py`** — 23/23 on 2026-08-22, the first run covering either. Until then both rested on unit tests and well-attested DPs alone; that gap is closed, and the harness confirms nothing beyond the entity set it names appears. It power-cycles the real diffuser, so a re-run stays a deliberate act rather than something to do in passing |
 | ✅ | **A rotated local key no longer fails silently** (#49). Re-pairing in the app mints a new key, the old one stops decrypting immediately, and until now the entire user-facing consequence was `unavailable` entities and a climbing counter — the remedy existed and nothing pointed at it. An hour of silence now raises a repair card that names both plausible causes and asserts neither, because on this transport a dead key and a dead battery are the same error payload; the conventional `ConfigEntryAuthFailed` would have told users with an unplugged diffuser that their credentials were wrong ([ADR-008](docs/decisions.md#adr-008--never-assert-a-cause-the-transport-cannot-distinguish)). The threshold is wall clock rather than a count of polls, because the poll interval is a user setting spanning 10 s to 3600 s |
-| ❓ | **DP 104** (`kk`) is the last unidentified datapoint. It has not moved through an app walk, a remote walk, an LED toggle or a charger event; a firmware constant is the leading explanation. The `datapoints_recon` diagnostic sensor watches it, and gets deleted once it is named |
+| ✅ | **The recon sensor stops arriving switched on** (#51). `Datapoints (recon)` reports a count of Tuya datapoints with the raw payload in its attributes — the instrument that mapped this device, and noise on the device page of somebody who bought a diffuser. It is now registered and *disabled*, not removed: it is still the only live view of the raw datapoints, and the recon workflow it exists for has nowhere else to run. Disabling beat an options-flow flag defaulting off for a reason that is easy to miss — `entity_registry_enabled_default` is read only when an entity is registered for the **first** time, so the change is inert on every install that already has the entity, while a default-off option would have reached back and switched it off on the one install where DP 104 is actually being watched. **Not yet observed in a real Home Assistant:** `tools/verify_ha.py` now expects a fresh install to show ten entities and not the eleventh, and has not been re-run since |
+| ❓ | **DP 104** (`kk`) is the last unidentified datapoint. It has not moved through an app walk, a remote walk, an LED toggle or a charger event; a firmware constant is the leading explanation. The `datapoints_recon` diagnostic sensor watches it. It no longer gets deleted once the DP is named (#51): watching a *count* of datapoints is a job with no end date, and the entity now ships disabled instead |
 | ⏸️ | Whether the phone app has to keep working alongside Home Assistant ([ADR-004](docs/decisions.md#adr-004--pending--must-the-phone-app-keep-working)) |
 | ✅ | **The repo's own redaction rule holds in the tree, and is enforced there** (#20). One device id, in dossier §6.2; two other appliances' ids out of the dossier entirely; `tests/test_redaction_rule.py` fails the build on a regression instead of waiting for somebody to run the audit sweep. The identifiers stay in the **git history of the private archive**, deliberately — a force-push there would clean `main` and would *not* clean the `refs/pull/*/head` that GitHub keeps for every PR, so it is the expensive half of a fix that does not fix the thing it is for ([ADR-007](docs/decisions.md#adr-007--do-not-rewrite-git-history-scrub-at-publication-on-a-fresh-repository) has the measurement, and the publication route that does work). The `local_key` has never been committed, on any ref — audited, clean |
 | ✅ | **The diagnostics dump is the one artefact designed to leave the machine, and it leaves without the credential** (#46). Redacted twice, because there are two ways in: by key name out of the config entry, and by substring out of the error strings, where `device.py`'s `f"{host}: … failed"` puts a LAN address that no key-based redactor can see. The tests assert the values are absent from the serialised dump, not that the output has a particular shape |

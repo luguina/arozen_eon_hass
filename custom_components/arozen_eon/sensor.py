@@ -11,10 +11,11 @@ Three kinds of sensor, deliberately:
   write-verified as mirrors on 2026-08-21 (docs/datapoints.md). These go unavailable with
   the device, unlike the diagnostics.
 * **Datapoints** — the raw DP set, exposed as attributes. This was the recon phase's primary
-  instrument inside Home Assistant, before the map existed. It stays as scaffolding while
-  docs/datapoints.md has an open question (DP 104) — it is how new DPs would be noticed —
-  and can be deleted once the map settles. DP 2 came off that list the hard way: it was the
-  power switch all along, sitting unidentified while the switch entity wrote to the valve.
+  instrument inside Home Assistant, before the map existed, and it is the one entity here that
+  ships **disabled** (#51): it is scaffolding for whoever is still chasing DP 104, on a device
+  page belonging to someone who just wants a diffuser. DP 2 came off that list the hard way:
+  it was the power switch all along, sitting unidentified while the switch entity wrote to
+  the valve.
 """
 
 from __future__ import annotations
@@ -182,16 +183,47 @@ class ArozenCountdownRemainingSensor(ArozenEntity, SensorEntity):
 
 
 class ArozenDatapointsSensor(ArozenDiagnosticSensor):
-    """The raw DP set, as reported by the last successful poll.
+    """The raw DP set, as reported by the last successful poll. Ships disabled (#51).
 
-    Scaffolding from the recon phase, kept while DP 104 is still unidentified:
-    it is the way to watch DPs move while toggling controls in the Tuya app, from the Home
-    Assistant UI. State is the count of DPs seen; the set itself is in the attributes.
-    Delete this entity once the map settles.
+    State is the count of DPs seen; the set itself is in the attributes. Two jobs, and only
+    the first of them is finished:
+
+    * **the recon instrument** — watch DPs move while toggling controls in the phone app,
+      from the Home Assistant UI rather than by running tools/ scripts at a device three
+      rooms away. That workflow is *done*: docs/datapoints.md records every control the app
+      exposes as mapped to some other DP, so there is no untried stimulus left to aim at
+      DP 104, and the leading explanation for it is now a firmware constant rather than a
+      control nobody has pressed;
+    * **a tripwire on the count** — a firmware update that starts reporting a new DP, or
+      DP 104 finally moving, changes numbers the recorder has been keeping all along. That
+      job has no end date, which is why the "delete this entity once the map settles" note
+      that used to close this docstring is gone: the map is as settled as toggling can make
+      it, and the trigger that note named was never going to fire.
+
+    **Why disabled rather than deleted, or put behind an option (#51).** Deleting it takes
+    away the only *live* view of the raw dps — diagnostics.py carries the same dict into the
+    download, but a download is a snapshot and this is a watch. An options-flow flag
+    defaulting off was the alternative, and it is the wrong shape for precisely the reason
+    this is the right one: ``entity_registry_enabled_default`` is read only when an entity is
+    registered for the *first* time — ``async_get_or_create`` returns early for a unique_id it
+    already knows, and does not forward ``disabled_by`` on that path — so this change is inert
+    on every install that already has the entity, including the one where the tripwire is
+    actually being watched. A default-off option would have reached back and switched it off
+    there too, which is the opposite of what the issue asked for: spare the installer, do not
+    disarm the maintainer.
+
+    Turning it on is one toggle in the entity's settings, and Home Assistant reloads the entry
+    itself. Nothing is recorded while it is off — true of every way of hiding it, since the
+    recorder cannot keep history for an entity that is not reporting.
     """
 
     _attr_name = "Datapoints (recon)"
     _attr_icon = "mdi:database-search-outline"
+    #: Deliberately not ``entity_registry_visible_default``, which is the other way to keep it
+    #: off the device page. Hidden is worse than disabled here: a hidden entity still holds a
+    #: state, still fills the recorder and still answers to automations, so it costs the
+    #: installer everything about this sensor except the sight of it.
+    _attr_entity_registry_enabled_default = False
 
     def __init__(self, coordinator: ArozenCoordinator) -> None:
         super().__init__(coordinator, "datapoints")
