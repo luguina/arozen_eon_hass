@@ -326,6 +326,18 @@ private as the archive: the public history has no pull refs carrying anything, a
 PR and review record survives here. The scrub then happens once, at the moment it matters, on a
 history being rewritten anyway — where doing it now means doing it twice.
 
+**What travels is a list, and the list is in the tree.** [`tools/published_set.txt`](../tools/published_set.txt)
+names the published file set and carries the reasoning for everything held back;
+[`tools/publish_check.py`](../tools/publish_check.py) builds exactly that set into a scratch
+repository and runs its suite there, which is the check step above made repeatable. Both exist
+because #41 found the list living in a shell
+snippet in an issue body: it had drifted, and the first time anyone ran it the published set
+came back with two collection errors and three failures. The redaction guard split along the
+same seam — `tests/test_redaction_rule.py` travels and asserts that no identifier shape appears in
+any published file, `tests/test_one_authoritative_location.py` stays and enforces the one-home
+rule this tree needs while it still has a real identifier to give a home to. A scrubbed repository
+has no sanctioned location, so that is not a weakened guard but a different one.
+
 **What would change this.** Deciding to publish *this* repository, PR history and all, rather than a
 fresh one — at which point the calculation changes completely and the pull refs, not `main`, become
 the problem to solve. Or a `local_key` turning up in history, which is a different severity
