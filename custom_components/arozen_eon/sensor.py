@@ -213,8 +213,10 @@ class ArozenDatapointsSensor(ArozenDiagnosticSensor):
     disarm the maintainer.
 
     Turning it on is one toggle in the entity's settings, and Home Assistant reloads the entry
-    itself. Nothing is recorded while it is off — true of every way of hiding it, since the
-    recorder cannot keep history for an entity that is not reporting.
+    itself. Nothing is recorded while it is off, because the recorder cannot keep history for an
+    entity that is not reporting — a cost the options-flow alternative pays identically, since
+    an entity a flag never created has no history either. Hiding is the one exception, and it is
+    the wrong knob for the reason below.
     """
 
     _attr_name = "Datapoints (recon)"
