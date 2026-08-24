@@ -274,6 +274,30 @@ polling hard, that is why. A tolerated single poll failure holds the previous re
 than dropping every entity to `unavailable`; `sensor.…_failed_polls` still counts it, so a
 degrading link is visible instead of merely smoothed over.
 
+## When it misbehaves
+
+Every failure here looks the same from the dashboard: the entities go `unavailable`. A wrong
+local key, a wrong protocol version and a diffuser that has fallen asleep are three different
+problems with one symptom, so the state worth having is the state you cannot see — which
+protocol version is actually in use, how many polls have failed in a row, and what tinytuya
+answered with.
+
+**Settings → Devices & Services → Arozen EON Pro 2 → ⋮ → Download diagnostics.** A JSON file
+with the poll health, the intensity memory, the raw datapoints and the connection settings.
+Attach it to an issue as it comes.
+
+**The `local_key`, the device ID and the LAN address are taken out before the file exists** —
+including out of the error strings, which is the half that is easy to miss: the transport
+prefixes every failure with the address it was talking to, so the most useful field in the
+dump is also the one carrying a LAN address in free text where nothing matching on key names
+will find it. `tests/test_diagnostics.py` asserts on the **absence of those values** rather
+than on the shape of the file, so a rewrite that moves every key around still fails if a
+credential moves with them.
+
+The protocol version and the poll interval are deliberately left in the clear. They are the
+two settings a support conversation actually turns on, and a dump that redacts everything is a
+file with nothing in it.
+
 ## About the `local_key`
 
 > ⚠️ **This repository is private, and the thing that must never leave it is the Tuya
@@ -365,6 +389,7 @@ remember to run any of this.
 | ❓ | **DP 104** (`kk`) is the last unidentified datapoint. It has not moved through an app walk, a remote walk, an LED toggle or a charger event; a firmware constant is the leading explanation. The `datapoints_recon` diagnostic sensor watches it, and gets deleted once it is named |
 | ⏸️ | Whether the phone app has to keep working alongside Home Assistant ([ADR-004](docs/decisions.md#adr-004--pending--must-the-phone-app-keep-working)) |
 | ✅ | **The repo's own redaction rule holds in the tree, and is enforced there** ([#20](https://github.com/luguina/arozen_ha_controller/issues/20)). One device id, in dossier §6.2; two other appliances' ids out of the dossier entirely; `tests/test_redaction_rule.py` fails the build on a regression instead of waiting for somebody to run the audit sweep. The identifiers stay in **git history**, deliberately — a force-push would clean `main` and would *not* clean the `refs/pull/*/head` that GitHub keeps for every PR, so it is the expensive half of a fix that does not fix the thing it is for ([ADR-007](docs/decisions.md#adr-007--do-not-rewrite-git-history-scrub-at-publication-on-a-fresh-repository) has the measurement, and the publication route that does work). The `local_key` has never been committed, on any ref — audited, clean |
+| ✅ | **The diagnostics dump is the one artefact designed to leave the machine, and it leaves without the credential** ([#46](https://github.com/luguina/arozen_ha_controller/issues/46)). Redacted twice, because there are two ways in: by key name out of the config entry, and by substring out of the error strings, where `device.py`'s `f"{host}: … failed"` puts a LAN address that no key-based redactor can see. The tests assert the values are absent from the serialised dump, not that the output has a particular shape |
 
 The honest version, with evidence and everything still unknown, is
 [docs/datapoints.md](docs/datapoints.md).
@@ -384,6 +409,10 @@ custom_components/arozen_eon/     the integration. dp.py is the only file that k
                                   diagnostics, raw DPs
   coordinator.py                  the poll loop, poll health, and the intensity memory
                                   that survives the firmware's power-on reset
+  diagnostics.py                  the ⋮ → Download diagnostics dump, with the local key,
+                                  the device id and the LAN address taken out — including
+                                  out of the error strings, where a key-based redactor
+                                  cannot see them
 docs/
   why-not-the-official-integration.md   why this exists: the core source trace, the empty
                                         cloud schema, the topology, and the prior art
