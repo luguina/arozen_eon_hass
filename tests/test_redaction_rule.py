@@ -81,9 +81,9 @@ def _publishable_text_files(root: Path = REPO) -> list[str]:
 
     Asked of git rather than walked off the disk, and each half of that answer is argued for.
 
-    `--others` is here because `--cached` alone — which is all this asked for until #36 —
-    cannot fail on a file nobody has staged yet, and that is *every* new file, for the whole
-    time anyone is writing it. Two new test files went green that way during #35 and tripped
+    `--others` is here because `--cached` alone — which is all this asked for until #36 (private
+    archive) — cannot fail on a file nobody has staged yet, and that is *every* new file, for the
+    whole time anyone is writing it. Two new test files went green that way during #35 and tripped
     this rule only on commit, which is to say after the value was already in a commit object.
     "Amend it away before pushing" is a discipline, and replacing a discipline is the entire
     reason this file exists.

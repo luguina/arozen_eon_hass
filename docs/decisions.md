@@ -5,6 +5,12 @@ ADR-style. One entry per decision that would otherwise get re-argued. Record the
 
 Status values: `accepted` · `superseded` · `pending`.
 
+Several entries cite **`sibling_ha_controller`**, a sibling Home Assistant project in the same
+house — a BLE device behind an ESP32 proxy, where a number of these questions were argued
+first. Its ADR numbers are cited but never linked: that repository is private, so a link would
+404 for every reader who does not already have it, and it is the reasoning that is being
+borrowed rather than the document.
+
 ---
 
 ## ADR-001 — Local LAN control; the Tuya cloud is the fallback, not the plan
@@ -19,11 +25,11 @@ TCP 6668, or not at all.
 fetch the `local_key`, and never again at runtime.
 
 **Why.** No vendor account in the control path, no outage, no round trip to a datacentre, and
-it keeps working when the internet does not. This is the same call as
-the sibling project's ADR-004 and for the same
-reasons — but note it is a *weaker* commitment here, because unlike the sibling project the cloud path is
-a genuinely working fallback rather than an inversion of the project's point. The official Tuya
-integration already talks to this device; it just has nothing useful to say about it.
+it keeps working when the internet does not. This is the same call as `sibling_ha_controller`
+ADR-004 and for the same reasons — but note it is a *weaker* commitment here, because unlike
+the sibling project the cloud path is a genuinely working fallback rather than an inversion of the
+project's point. The official Tuya integration already talks to this device; it just has
+nothing useful to say about it.
 
 **What made this look viable, as filed — and the premise is false.** The device is
 **mains-powered** (confirmed by the project owner, 2026-08-10). A battery-powered Tuya device sleeps, drops off
@@ -80,9 +86,9 @@ a bridge because BLE could not span the distance; **WiFi already spans it**, whi
 reason this device has an app that works "from anywhere". Copying the proxy across would add a
 board, a firmware, a power supply and a failure mode, in exchange for nothing.
 
-Stated plainly because a constraint that *feels* decisive often is not — the same trap
-the sibling project's ADR-002 called out from the other
-direction, where "3 floors away" felt like it chose the implementation language and did not.
+Stated plainly because a constraint that *feels* decisive often is not — the same trap the sibling project's
+ADR-002 called out from the other direction, where "3 floors away" felt like it chose the
+implementation language and did not.
 
 **What would change this.** Nothing plausible. If WiFi does not reach the diffuser's position,
 the fix is an access point or a mesh node, not a protocol bridge.
@@ -153,9 +159,8 @@ connection problems, and advises closing the manufacturer's app. So there is a p
 in which local control and the Tuya Smart app cannot comfortably coexist.
 
 **Why this is not being decided by whoever writes the code.** On the sibling project the equivalent
-requirement (its ADR-006) was a hard constraint
-that would have rejected otherwise-good solutions, and it was eventually *withdrawn* by the project owner
-rather than engineered around. Same principle: if the answer is "the app must keep working",
+requirement (its ADR-006) was a hard constraint that would have rejected otherwise-good
+solutions, and it was eventually *withdrawn* by the project owner rather than engineered around. Same principle: if the answer is "the app must keep working",
 that changes which options are admissible, and it is a preference, not a finding.
 
 **What is genuinely different from the sibling project, and it matters.** The sibling project's app talked BLE, and
@@ -186,8 +191,8 @@ evidence exists. It stays out until local control has actually been tried and ac
 
 **Scheduling — expect this to land in Home Assistant, not on the device.** Tuya's `xxj`
 category does expose a `countdown` DP, and the app clearly has schedules. But the sibling project's work
-ended at its ADR-009 — on-device schedule records
-were rejected in favour of Home Assistant automations, because on-device schedules fought with
+ended at its ADR-009 — on-device schedule records were rejected in favour of Home Assistant
+automations, because on-device schedules fought with
 a reliable *off*, were overwritten by the phone app, and ran against a device clock that could
 not be verified. **At least the second of those three almost certainly applies here too**, since
 the Tuya app owns the device's schedule state and re-pushes it. Not a decision yet — flagged so
@@ -208,8 +213,9 @@ remote — and the app does not undo any of it either
 causing this" — we never caused it — but **which of the device's own defaults, if any, the
 integration should overrule on the user's behalf.**
 
-**Decision.** Restore **intensity** ([#14](https://github.com/luguina/arozen_ha_controller/issues/14)). Leave the **countdown** alone. Take
-no position on the LED until it has a write test ([#15](https://github.com/luguina/arozen_ha_controller/issues/15)).
+**Decision.** Restore **intensity** (#14, private archive — see ADR-007 for what the issue
+numbers in these documents refer to). Leave the **countdown** alone. Take no position on the
+LED until it has a write test (#15).
 
 **LED update, 2026-08-22 — the position, now that the write test exists.** DP 7 is a command
 DP: both directions were accepted and held for 30 s. It gets a switch, and it gets **no
@@ -263,7 +269,8 @@ sufficient and the scope narrows to Home-Assistant-initiated power-ons only.
 
 ## ADR-007 — Do not rewrite git history. Scrub at publication, on a fresh repository.
 
-**Status:** accepted · **Date:** 2026-08-22
+**Status:** accepted · **Date:** 2026-08-22 · **Updated 2026-08-24 — publication decided, the
+public repository named `arozen_eon_hass`**
 
 **Context.** An audit that day found the repo breaking its own redaction rule
 ([captures/README.md](captures/README.md#redaction-rule)), which grants each identifier **one**
@@ -279,8 +286,10 @@ only, and a Tuya device ID is an *address, not a credential*. Holding one grants
 control needs the key, and re-pairing regenerates the key while the ID survives.
 
 **Decision.** Fix the tree, enforce it with a test, and **leave git history alone.** No
-`git filter-repo`, no force-push. If this repository is ever published, the scrub happens then, by
+`git filter-repo`, no force-push. When this repository is published, the scrub happens then, by
 pushing a scrubbed history to a **new** repository and keeping this one private as the archive.
+That *when* was an *if* on the day this was written; publication has since been decided and the
+target named, in the dated update at the end of this entry.
 
 **This reverses a decision taken earlier the same day, and the reversal is the point of the entry.**
 The first version of ADR-007 said *rewrite now*, on the reasoning that the repo should follow the
@@ -330,13 +339,50 @@ history being rewritten anyway — where doing it now means doing it twice.
 names the published file set and carries the reasoning for everything held back;
 [`tools/publish_check.py`](../tools/publish_check.py) builds exactly that set into a scratch
 repository and runs its suite there, which is the check step above made repeatable. Both exist
-because #41 found the list living in a shell
-snippet in an issue body: it had drifted, and the first time anyone ran it the published set
-came back with two collection errors and three failures. The redaction guard split along the
+because #41 found the list living in a shell snippet in an issue body: it had drifted, and the
+first time anyone ran it the published set came back with two collection errors and three
+failures. The redaction guard split along the
 same seam — `tests/test_redaction_rule.py` travels and asserts that no identifier shape appears in
 any published file, `tests/test_one_authoritative_location.py` stays and enforces the one-home
 rule this tree needs while it still has a real identifier to give a home to. A scrubbed repository
 has no sanctioned location, so that is not a weakened guard but a different one.
+
+**Update — 2026-08-24. Publication is decided, and the public repository has a name.**
+The conditional in **Decision** above has resolved. The public repository is **`arozen_eon_hass`**
+(<https://github.com/luguina/arozen_eon_hass>). The archive is this project's original repository,
+kept private, and it is where the issue and pull-request numbers in these documents live. The name
+is recorded *here* rather than only in the publication epic (#30) because every self-referential URL
+in the tree needs a target before it can be rewritten, and a name that lives only in an issue is one
+the rewrite has to go looking for.
+
+Three kinds of self-reference had to be told apart, because they break differently at the moment of
+publication and only one of them is anybody's emergency:
+
+- **`manifest.json`'s `documentation` and `issue_tracker`** are the load-bearing pair. hassfest
+  requires both, and Home Assistant renders them on the integration's device page as "Documentation"
+  and "Report an issue" — the only route an installed integration offers back to its source. They
+  point at the public repository. A 404 there is a user in a house with a misbehaving diffuser and
+  nowhere to go.
+- **Badges, workflow links and the HACS custom-repository URL** point at the public repository for
+  the same reason in a milder form: they are read by somebody deciding whether to install, and a
+  broken badge is an answer to that question.
+- **Issue and pull-request references point at discussion that does not travel.** #5's remote walk,
+  #14's restore design, #20's audit — that is the working record, and the working record stays in
+  the archive. Rewriting the numbers to the public repository would make them *confidently wrong*,
+  which is worse than a number a reader can see refers to somewhere else, because nothing about a
+  plausible wrong number invites checking.
+
+**So: an issue or pull-request number in these documents is written as plain `#NN`, never as a
+link.** It refers to the archive, and it will not correspond to anything in the public repository,
+whose numbering starts again at one. Most of the tree already wrote them this way; the linked
+minority was the half that would have 404'd for every public reader, and it is gone. Where a
+document leans on a reference hard enough that a reader might go looking, the first
+one in that document says so outright — `#20 (private archive)` — and the rest are bare, because a
+parenthetical repeated thirty times stops being read.
+
+A live link survives only where the target is something a public reader can actually open: upstream
+repositories, Home Assistant core, HACS. That is what the remaining links in these documents are,
+and it is the test to apply to a new one.
 
 **What would change this.** Deciding to publish *this* repository, PR history and all, rather than a
 fresh one — at which point the calculation changes completely and the pull refs, not `main`, become
@@ -354,4 +400,4 @@ test.
 |---|---|---|
 | [ADR-004](#adr-004--pending--must-the-phone-app-keep-working) | Must the phone app keep working? | The project owner, informed by a coexistence measurement — now half-made: with the app open, local writes failed intermittently (null/914); with it closed, they landed (dossier §6.3) |
 | ~~On-device schedules vs Home Assistant automations~~ | **Resolved 2026-08-21 by evidence:** the app's schedule moved no DP during the control walk — scheduling is cloud/app-side, so HA automations + the countdown DP (dossier §6.6) |
-| — | Whether to make this repo public | Two conditions, not one. (a) Confirming no `local_key` has ever been committed — ✅ clean, tree and history, audited 2026-08-22. (b) The one-authoritative-location rule in [captures/README.md](captures/README.md#redaction-rule) actually holding. ✅ in the tree, and enforced by `tests/test_redaction_rule.py`; **not** in history, and deliberately so — publishing *this* repo can never be clean, because its `refs/pull/*/head` carry the identifiers and no force-push or API call removes them ([ADR-007](#adr-007--do-not-rewrite-git-history-scrub-at-publication-on-a-fresh-repository)). The clean route is a **fresh public repository** built from a scrubbed history, with this one kept private as the archive. The gate named only (a) until [#20](https://github.com/luguina/arozen_ha_controller/issues/20), which meant the repo could satisfy its own precondition with the `device_id` rule broken |
+| — | ~~Whether to make this repo public~~ | **Resolved 2026-08-24: yes, as a fresh repository — [`arozen_eon_hass`](https://github.com/luguina/arozen_eon_hass), with the original repository kept private as the archive** ([ADR-007](#adr-007--do-not-rewrite-git-history-scrub-at-publication-on-a-fresh-repository)). Two conditions, not one, and both hold. (a) Confirming no `local_key` has ever been committed — ✅ clean, tree and history, audited 2026-08-22. (b) The one-authoritative-location rule in [captures/README.md](captures/README.md#redaction-rule) actually holding. ✅ in the tree, and enforced by `tests/test_redaction_rule.py`; **not** in history, and deliberately so — publishing *this* repo can never be clean, because its `refs/pull/*/head` carry the identifiers and no force-push or API call removes them. That is what makes a fresh repository the answer rather than a flip of this one. The gate named only (a) until #20, which meant the repo could satisfy its own precondition with the `device_id` rule broken |
