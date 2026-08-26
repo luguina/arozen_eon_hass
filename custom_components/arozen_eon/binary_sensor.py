@@ -66,8 +66,7 @@ async def async_setup_entry(
 class ArozenMistingBinarySensor(ArozenEntity, BinarySensorEntity):
     """True while the nozzle is open (DP 103 == "kai")."""
 
-    _attr_name = "Misting"
-    _attr_icon = "mdi:air-humidifier"
+    _attr_translation_key = "misting"
 
     def __init__(self, coordinator: ArozenCoordinator) -> None:
         super().__init__(coordinator, "misting")
@@ -139,7 +138,7 @@ class ArozenChargingBinarySensor(ArozenEntity, BinarySensorEntity):
     not "the number reached its maximum", and nothing here should be built as though it were.
     """
 
-    _attr_name = "Charging"
+    _attr_translation_key = "charging"
     _attr_device_class = BinarySensorDeviceClass.BATTERY_CHARGING
 
     def __init__(self, coordinator: ArozenCoordinator) -> None:

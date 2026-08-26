@@ -24,6 +24,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 
 from . import dp
+from .const import DOMAIN
 from .coordinator import ArozenConfigEntry, ArozenCoordinator
 
 if TYPE_CHECKING:
@@ -63,7 +64,6 @@ class ArozenDpSelect(ArozenEntity, SelectEntity):
     """
 
     _dp: int
-    _label: str
     #: device value -> label shown in Home Assistant
     _labels: dict[str, str]
 
@@ -93,26 +93,38 @@ class ArozenDpSelect(ArozenEntity, SelectEntity):
         if value is None:
             # Home Assistant validates against _attr_options before calling, so this is a
             # bug in the map rather than bad user input - fail loudly, do not write a guess.
+            #
+            # Translated like the other three anyway, though it can only fire when this
+            # integration is wrong. If it ever does fire it fires in somebody else's Home
+            # Assistant, and what they need to put in the bug report - the entity and the
+            # option - are placeholders, which no translation touches. One mechanism in one
+            # method is worth more than the one string a translator will never see in use.
             raise HomeAssistantError(
-                f"{option!r} is not a known Arozen EON Pro 2 {self._label} setting"
+                translation_domain=DOMAIN,
+                translation_key="unknown_option",
+                translation_placeholders={"option": option, "entity_id": self.entity_id},
             )
         try:
             await self.coordinator.async_set_dp(self._dp, value)
         except ArozenError as err:
             raise HomeAssistantError(
-                f"Failed to set the Arozen EON Pro 2 {self._label} to {option}: {err}"
+                translation_domain=DOMAIN,
+                translation_key="set_option_failed",
+                translation_placeholders={
+                    "entity_id": self.entity_id,
+                    "option": option,
+                    "error": str(err),
+                },
             ) from err
 
 
 class ArozenIntensitySelect(ArozenDpSelect):
     """Scent intensity, L1 (most frequent bursts) to L6 (weakest)."""
 
-    _attr_name = "Intensity"
-    _attr_icon = "mdi:air-filter"
+    _attr_translation_key = "intensity"
     _attr_options = list(dp.INTENSITY_LABELS.values())
     _labels = dp.INTENSITY_LABELS
     _dp = dp.DP_INTENSITY
-    _label = "intensity"
 
     def __init__(self, coordinator: ArozenCoordinator) -> None:
         super().__init__(coordinator, "intensity")
@@ -138,12 +150,10 @@ class ArozenIntensitySelect(ArozenDpSelect):
 class ArozenTimerSelect(ArozenDpSelect):
     """Auto-off countdown: untimed, or 1-8 hours."""
 
-    _attr_name = "Timer"
-    _attr_icon = "mdi:timer-cog-outline"
+    _attr_translation_key = "timer"
     _attr_options = list(dp.COUNTDOWN_LABELS.values())
     _labels = dp.COUNTDOWN_LABELS
     _dp = dp.DP_COUNTDOWN
-    _label = "timer"
 
     def __init__(self, coordinator: ArozenCoordinator) -> None:
         super().__init__(coordinator, "timer")

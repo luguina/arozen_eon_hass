@@ -61,6 +61,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 
 from . import dp
+from .const import DOMAIN
 from .coordinator import ArozenConfigEntry, ArozenCoordinator
 
 if TYPE_CHECKING:
@@ -109,8 +110,14 @@ class ArozenPowerSwitch(ArozenEntity, SwitchEntity):
     """
 
     # The device's primary control, so it takes the device's own name rather than a suffix.
+    # ``_attr_name`` wins outright: `Entity._name_internal` returns it the moment the attribute
+    # exists, before it ever looks at a translation key, so setting None here still means "the
+    # device's name" and the key below cannot quietly override it. The key is here for
+    # `icons.json`, which is addressed by translation key and has no other way to reach an
+    # entity - the alternative was leaving one static icon behind in Python for no reason
+    # except that this entity has no name of its own.
     _attr_name = None
-    _attr_icon = "mdi:scent"
+    _attr_translation_key = "power"
 
     def __init__(self, coordinator: ArozenCoordinator) -> None:
         super().__init__(coordinator, "power")
@@ -135,7 +142,9 @@ class ArozenPowerSwitch(ArozenEntity, SwitchEntity):
             await self.coordinator.async_set_dp(dp.DP_POWER, value)
         except ArozenError as err:
             raise HomeAssistantError(
-                f"Failed to turn the Arozen EON Pro 2 {'on' if value else 'off'}: {err}"
+                translation_domain=DOMAIN,
+                translation_key="turn_on_failed" if value else "turn_off_failed",
+                translation_placeholders={"entity_id": self.entity_id, "error": str(err)},
             ) from err
 
 
@@ -170,7 +179,7 @@ class ArozenLedSwitch(ArozenEntity, SwitchEntity):
     an optimistic switch would paper over exactly the failure mode this entity was gated on.
     """
 
-    _attr_name = "LED"
+    _attr_translation_key = "led"
 
     def __init__(self, coordinator: ArozenCoordinator) -> None:
         super().__init__(coordinator, "led")
@@ -179,11 +188,20 @@ class ArozenLedSwitch(ArozenEntity, SwitchEntity):
     def icon(self) -> str:
         """Named for the state it is showing, unlike the static icons elsewhere here.
 
-        The rest of the integration sets ``_attr_icon`` once, which is fine when the icon
-        names a *thing* — a scent, a timer, a humidifier. These ones name a *state*, so a
-        static ``mdi:led-on`` sitting next to a switch that reads off would be a small lie.
-        Unknown gets its own outline rather than being drawn as off, for the same reason
-        ``is_on`` returns None rather than False.
+        Every other icon in the integration is a fixed string in ``icons.json``, which is
+        fine when the icon names a *thing* — a scent, a timer, a humidifier. These ones name
+        a *state*, so a static ``mdi:led-on`` sitting next to a switch that reads off would
+        be a small lie. Unknown gets its own outline rather than being drawn as off, for the
+        same reason ``is_on`` returns None rather than False.
+
+        **It stays in Python, and the reason is not that `icons.json` cannot express it.** It
+        can: `default` plus a `state` block mapping `on` and `off` reproduces this exactly,
+        with `unknown` falling through to the outline the same way it does here — 611 entity
+        icons in core use that block, some of them keying `unknown` explicitly. What a JSON
+        file cannot do is sit next to `is_on`. These two properties have to agree about what
+        `None` means, and the next person to give `is_on` a third meaning will be reading this
+        file, not a manifest three directories away. So the one icon whose value depends on a
+        reading stays where the reading is defined (#50).
         """
         if self.is_on is None:
             return "mdi:led-outline"
@@ -209,5 +227,7 @@ class ArozenLedSwitch(ArozenEntity, SwitchEntity):
             await self.coordinator.async_set_dp(dp.DP_LED, value)
         except ArozenError as err:
             raise HomeAssistantError(
-                f"Failed to turn the Arozen EON Pro 2 LED {'on' if value else 'off'}: {err}"
+                translation_domain=DOMAIN,
+                translation_key="turn_on_failed" if value else "turn_off_failed",
+                translation_placeholders={"entity_id": self.entity_id, "error": str(err)},
             ) from err
