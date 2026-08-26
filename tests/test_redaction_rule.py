@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+from collections.abc import Iterable
 from pathlib import Path
 
 import pytest
@@ -154,10 +155,27 @@ def published_files(root: Path = REPO) -> list[str]:
     where the alternative — treating a missing manifest as "nothing is published" — would report
     green over an unswept tree.
     """
-    names = _publishable_text_files(root)
+    return published_subset(_publishable_text_files(root), root)
+
+
+def published_subset(names: Iterable[str], root: Path = REPO) -> list[str]:
+    """The manifest applied to an arbitrary list of repo-relative paths.
+
+    Split out of `published_files` for one caller that cannot use it:
+    `tools/scrub_for_publication.py` (private archive) has to decide what travels for every path
+    that has *ever* been in the history, not only the ones in the tree today, because the list it
+    hands `git filter-repo` decides what the published repository will ever have contained. The
+    manifest's subtree entries are what make that answerable — `custom_components/` means the
+    subtree, whenever a file was in it — and re-implementing that matching in the tool would be
+    the second parser #41 exists to prevent.
+
+    The missing-manifest rule is the same one `published_files` documents, and for the same
+    reason: everything enumerated is published, which is both true in the public repository and
+    the safe direction to be wrong in.
+    """
     manifest = root / MANIFEST
     if not manifest.is_file():
-        return names
+        return list(names)
     include, exclude = _manifest_rules(manifest.read_text(encoding="utf-8"))
     return [n for n in names if _matches(n, include) and not _matches(n, exclude)]
 
