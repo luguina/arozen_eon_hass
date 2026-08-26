@@ -97,7 +97,17 @@ class FakeConfigEntries:
         self.unload_result = True
 
     def async_update_entry(self, entry, **changes):
+        """Records the call *and* applies it, because the real one does both.
+
+        `ConfigEntries._async_update_entry` writes each changed field onto the entry with
+        `object.__setattr__` before scheduling the save (config_entries.py:2599). A fake that
+        only recorded would let a migration test assert `entry.minor_version` and get the
+        stale value back — passing or failing for a reason that has nothing to do with the
+        code under test.
+        """
         self.updated.append((entry, changes))
+        for field, value in changes.items():
+            setattr(entry, field, value)
 
     async def async_forward_entry_setups(self, entry, platforms):
         self.forwarded.append((entry, list(platforms)))
@@ -348,6 +358,34 @@ async def test_the_handler_answers_with_a_bool():
     assert type(await async_migrate_entry(FakeHass(), FakeEntry())) is bool
 
 
+async def test_a_stale_minor_version_is_stamped_forward():
+    """The half of a no-op migration that is not nothing.
+
+    Home Assistant compares the numbers it read off disk and re-runs the handler whenever they
+    differ, so a branch that answers True without moving the stamp migrates the same entry on
+    every restart, forever. This was visible in the real-Home-Assistant run: an entry seeded at
+    1.0 loaded cleanly and came out still stamped 1.0.
+    """
+    hass, entry = FakeHass(), FakeEntry(minor_version=0)
+
+    assert await async_migrate_entry(hass, entry) is True
+    assert entry.minor_version == ArozenConfigFlow.MINOR_VERSION
+    assert hass.config_entries.updated == [(entry, {"minor_version": 1})]
+    assert entry.data == ENTRY_DATA, "a minor bump is additive - nothing here changes shape"
+
+
+async def test_a_newer_minor_version_is_left_where_it_is():
+    """Forward only. An entry stamped ahead of this build has been through a newer release and
+    come back down — exactly what `MINOR_VERSION` exists to tolerate, since its data is a
+    superset of what this build reads. Dragging the number backwards would discard the only
+    record that the migration has already run."""
+    hass, entry = FakeHass(), FakeEntry(minor_version=9)
+
+    assert await async_migrate_entry(hass, entry) is True
+    assert entry.minor_version == 9
+    assert hass.config_entries.updated == []
+
+
 async def test_a_version_with_no_branch_is_refused():
     """The half of this that is not a no-op.
 
@@ -359,8 +397,12 @@ async def test_a_version_with_no_branch_is_refused():
 
 
 async def test_a_refused_version_says_which_one_it_was(caplog):
+    """Announced *and* refused. A handler that logged and then returned True would leave the
+    log looking exactly like a working refusal while the entry loaded anyway, which is the
+    failure this whole branch exists to prevent."""
     with caplog.at_level(logging.ERROR, logger="custom_components.arozen_eon"):
-        await async_migrate_entry(FakeHass(), FakeEntry(version=3, minor_version=2))
+        refused = await async_migrate_entry(FakeHass(), FakeEntry(version=3, minor_version=2))
+    assert refused is False
     assert "3.2" in caplog.text, "the refused version has to be in the message to act on"
 
 

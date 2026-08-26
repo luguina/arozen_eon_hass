@@ -78,7 +78,11 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ArozenConfigEntry) -> 
     place the failing entry's stamp appears. Both paths were run against a real Home Assistant
     2026.8.1 with the delivered file set and an entry stamped by hand, since the flow cannot
     write a stale one: 1.0 went through this function and on to register every entity, and 0.1
-    was refused here with no platform set up and no entity registered.
+    was refused here with no platform set up and no entity registered. The 1.0 run is also what
+    the stamping below is for: on the first pass it loaded but came off disk still stamped 1.0,
+    which would have re-migrated it on every restart for the life of the install. With the
+    stamp it comes off disk as 1.1. The refused entry stays 0.1, which is right - a migration
+    that did not happen must not leave a record saying it did.
 
     The forward-migration idiom, for whoever needs the first one: branches oldest-first, each
     bringing the entry up exactly one step with
@@ -87,7 +91,28 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ArozenConfigEntry) -> 
     """
     if entry.version == 1:
         # `entry.data` has only ever had one shape: host, device id, local key, protocol
-        # version, exactly as `STEP_USER_SCHEMA` writes them.
+        # version, exactly as `STEP_USER_SCHEMA` writes them. So there is nothing to rewrite -
+        # but the entry still has to be *stamped*, or it arrives here again on every single
+        # restart. Home Assistant compares the numbers it read off disk, and a handler that
+        # answers True without moving them has changed nothing it can see
+        # (config_entries.py:1153); the save it schedules afterwards writes the old stamp
+        # straight back. Stamping is what makes a migration a one-off.
+        #
+        # Forward only. A stamp *ahead* of this build is an entry that has been through a newer
+        # release and come back down, which is the case `MINOR_VERSION` exists to tolerate -
+        # its data is a superset of what this build reads. Dragging the number backwards would
+        # throw away the one record that it has already been migrated.
+        #
+        # The target comes from the flow rather than a literal repeated here, so the two cannot
+        # drift. Imported inside the function because this is the only path that needs it and
+        # the class is certain to be loaded already: `ConfigEntry.async_migrate` looks the flow
+        # up in HANDLERS before it will call this at all (config_entries.py:1141).
+        from .config_flow import ArozenConfigFlow
+
+        if entry.minor_version < ArozenConfigFlow.MINOR_VERSION:
+            hass.config_entries.async_update_entry(
+                entry, minor_version=ArozenConfigFlow.MINOR_VERSION
+            )
         return True
 
     _LOGGER.error(
