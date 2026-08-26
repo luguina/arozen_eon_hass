@@ -96,7 +96,32 @@ async def _async_validate(
 class ArozenConfigFlow(ConfigFlow, domain=DOMAIN):
     """Add a diffuser by host, device ID and local key."""
 
+    #: The shape of `entry.data`, stamped into every entry this flow creates and compared
+    #: against on every load. **Both numbers are part of the schema contract: change the shape
+    #: of `entry.data`, bump the matching one here, and add the branch to `async_migrate_entry`
+    #: in `__init__.py` in the same commit.** Nothing about editing `STEP_USER_SCHEMA` forces
+    #: any of that, which is why the rule is written at the constant rather than in a document
+    #: - this is where somebody reshaping the entry is standing. `tests/test_setup_entry.py`
+    #: fails the build on any change to the pair below, so the rule has teeth as well as prose:
+    #: the assertion is updated last, after the branch it is there to remind you to write.
+    #:
+    #: Which of the two to move is the whole distinction, and it is about **old code meeting
+    #: new data**, not about how large the change feels:
+    #:
+    #: * `VERSION` - an entry in the old shape breaks the running code. A key was renamed or
+    #:   removed, a value changed type, something moved from `data` to `options`. Home Assistant
+    #:   refuses to load an entry stamped *higher* than this (config_entries.py:1156), which is
+    #:   what makes a downgrade a clean error message instead of a `KeyError`.
+    #: * `MINOR_VERSION` - a purely additive change the old code tolerates, because the key it
+    #:   reads is still there and still means what it meant. This is the cheaper lever: an
+    #:   install that downgrades keeps working, so no downgrade path has to exist. 137 of the
+    #:   1483 integrations in the 2026.8.1 wheel declare it.
+    #:
+    #: Restating the framework default of 1 rather than inheriting it is deliberate: the two
+    #: levers are a pair, and a rule about choosing between them reads badly next to only one
+    #: of them.
     VERSION = 1
+    MINOR_VERSION = 1
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None

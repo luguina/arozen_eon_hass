@@ -19,6 +19,13 @@ refactor to the conventional call would have passed the whole suite green.
 The coordinator is faked here rather than built. It needs a real hass, it has its own tests,
 and what is under test on this page is the wiring: what gets constructed, from which values,
 in which order, and what still happens when the device says nothing.
+
+It also holds the schema-version tripwire (#53). `async_migrate_entry` cannot run today — the
+version on disk matches the version the flow declares, so Home Assistant never reaches for it —
+which means the ordinary tests below could not tell a working migration handler from a broken
+one. The last test in this file is the one that fires: it fails the build the day `VERSION` or
+`MINOR_VERSION` moves, because that is the only moment the handler starts mattering and the
+only moment somebody can still add the branch before a user's entry stops loading.
 """
 
 from __future__ import annotations
@@ -37,9 +44,11 @@ from homeassistant.const import CONF_HOST, Platform
 import custom_components.arozen_eon as init_module
 from custom_components.arozen_eon import (
     PLATFORMS,
+    async_migrate_entry,
     async_setup_entry,
     async_unload_entry,
 )
+from custom_components.arozen_eon.config_flow import ArozenConfigFlow
 from custom_components.arozen_eon.const import (
     CONF_DEVICE_ID,
     CONF_LOCAL_KEY,
@@ -84,7 +93,21 @@ class FakeConfigEntries:
         self.forwarded: list[tuple[object, list[Platform]]] = []
         self.unloaded: list[tuple[object, list[Platform]]] = []
         self.reloaded: list[str] = []
+        self.updated: list[tuple[object, dict]] = []
         self.unload_result = True
+
+    def async_update_entry(self, entry, **changes):
+        """Records the call *and* applies it, because the real one does both.
+
+        `ConfigEntries._async_update_entry` writes each changed field onto the entry with
+        `object.__setattr__` before scheduling the save (config_entries.py:2599). A fake that
+        only recorded would let a migration test assert `entry.minor_version` and get the
+        stale value back — passing or failing for a reason that has nothing to do with the
+        code under test.
+        """
+        self.updated.append((entry, changes))
+        for field, value in changes.items():
+            setattr(entry, field, value)
 
     async def async_forward_entry_setups(self, entry, platforms):
         self.forwarded.append((entry, list(platforms)))
@@ -103,8 +126,12 @@ class FakeHass:
 
 
 class FakeEntry:
-    def __init__(self, data=None, options=None):
+    def __init__(self, data=None, options=None, version=1, minor_version=1):
         self.entry_id = "test-entry-id"
+        #: The schema stamp Home Assistant writes into every entry and compares on load.
+        #: Real entries carry it; the migration handler reads nothing else.
+        self.version = version
+        self.minor_version = minor_version
         self.data = dict(data if data is not None else ENTRY_DATA)
         self.options = dict(options or {})
         self.runtime_data = None
@@ -294,3 +321,105 @@ async def test_unload_reports_a_refused_teardown(wired):
 def test_platforms_has_no_duplicates():
     """A duplicate is forwarded twice and sets every entity up twice, under suffixed ids."""
     assert len(PLATFORMS) == len(set(PLATFORMS))
+
+
+# -- The schema-version branch point (#53) -----------------------------------------------------
+
+
+async def test_a_current_entry_migrates_to_itself():
+    """Version 1 is the only shape `entry.data` has ever had, so there is nothing to do."""
+    assert await async_migrate_entry(FakeHass(), FakeEntry()) is True
+
+
+async def test_migrating_a_current_entry_rewrites_nothing():
+    """A no-op that quietly rewrote the entry would be a no-op only in its return value.
+
+    The real handler's write is `hass.config_entries.async_update_entry`, so the check is that
+    it was never called, not just that `entry.data` came out equal — the first migration to be
+    written here will reach for exactly that method.
+    """
+    hass, entry = FakeHass(), FakeEntry()
+    await async_migrate_entry(hass, entry)
+
+    assert entry.data == ENTRY_DATA
+    assert entry.options == {}
+    assert hass.config_entries.updated == []
+    assert (entry.version, entry.minor_version) == (1, 1)
+
+
+async def test_the_handler_answers_with_a_bool():
+    """Home Assistant type-checks the return before believing it.
+
+    `ConfigEntry.async_migrate` logs `did not return boolean` and treats the entry as failed
+    when the handler answers with anything else (config_entries.py:1183) — which is what a
+    branch that falls off the end returning `None` would do, and it would do it silently in
+    every test that only asserted truthiness.
+    """
+    assert type(await async_migrate_entry(FakeHass(), FakeEntry())) is bool
+
+
+async def test_a_stale_minor_version_is_stamped_forward():
+    """The half of a no-op migration that is not nothing.
+
+    Home Assistant compares the numbers it read off disk and re-runs the handler whenever they
+    differ, so a branch that answers True without moving the stamp migrates the same entry on
+    every restart, forever. This was visible in the real-Home-Assistant run: an entry seeded at
+    1.0 loaded cleanly and came out still stamped 1.0.
+    """
+    hass, entry = FakeHass(), FakeEntry(minor_version=0)
+
+    assert await async_migrate_entry(hass, entry) is True
+    assert entry.minor_version == ArozenConfigFlow.MINOR_VERSION
+    assert hass.config_entries.updated == [(entry, {"minor_version": 1})]
+    assert entry.data == ENTRY_DATA, "a minor bump is additive - nothing here changes shape"
+
+
+async def test_a_newer_minor_version_is_left_where_it_is():
+    """Forward only. An entry stamped ahead of this build has been through a newer release and
+    come back down — exactly what `MINOR_VERSION` exists to tolerate, since its data is a
+    superset of what this build reads. Dragging the number backwards would discard the only
+    record that the migration has already run."""
+    hass, entry = FakeHass(), FakeEntry(minor_version=9)
+
+    assert await async_migrate_entry(hass, entry) is True
+    assert entry.minor_version == 9
+    assert hass.config_entries.updated == []
+
+
+async def test_a_version_with_no_branch_is_refused():
+    """The half of this that is not a no-op.
+
+    Answering True here is the failure the issue was filed about: Home Assistant would carry
+    on to `async_setup_entry`, which reads four keys straight out of `entry.data`, and the user
+    would get a `KeyError` traceback instead of a migration error naming the integration.
+    """
+    assert await async_migrate_entry(FakeHass(), FakeEntry(version=2)) is False
+
+
+async def test_a_refused_version_says_which_one_it_was(caplog):
+    """Announced *and* refused. A handler that logged and then returned True would leave the
+    log looking exactly like a working refusal while the entry loaded anyway, which is the
+    failure this whole branch exists to prevent."""
+    with caplog.at_level(logging.ERROR, logger="custom_components.arozen_eon"):
+        refused = await async_migrate_entry(FakeHass(), FakeEntry(version=3, minor_version=2))
+    assert refused is False
+    assert "3.2" in caplog.text, "the refused version has to be in the message to act on"
+
+
+def test_the_schema_version_has_not_moved_without_a_migration_branch():
+    """The tripwire. If you are reading this because it failed, you bumped the version.
+
+    `async_migrate_entry` in `__init__.py` treats version 1 as current and refuses everything
+    else. That is correct only while 1 *is* current. The moment `VERSION` or `MINOR_VERSION`
+    moves, every entry already on disk is one step behind, and the handler has to grow the
+    branch that carries it forward before the pair below is updated to match.
+
+    The comment at those constants states the rule; this is the part that enforces it. Nothing
+    else can: the handler is unreachable at runtime until the bump, so the bump is the first
+    and last chance to catch a missing branch before it reaches an installed integration.
+    """
+    assert (ArozenConfigFlow.VERSION, ArozenConfigFlow.MINOR_VERSION) == (1, 1), (
+        "The config entry schema version moved. Add the branch to `async_migrate_entry` in "
+        "custom_components/arozen_eon/__init__.py that migrates an entry from the old version "
+        "to this one, then update the pair in this assertion."
+    )
