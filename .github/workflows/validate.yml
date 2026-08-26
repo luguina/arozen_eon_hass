@@ -73,7 +73,9 @@ jobs:
           # decision rather than left to look like an oversight — deleting this one word is
           # the whole of the change if the default store is ever pursued.
           ignore: brands
-          # No pull-request comment. The action posts one by default, which needs
-          # `pull-requests: write` — a scope this workflow otherwise has no use for, bought
-          # for a comment restating a check status already on the page.
-          comment: "false"
+          # Both of those were checked against the action rather than against its README.
+          # `INPUT_IGNORE` is read in custom_components/hacs/validate/manager.py and matched
+          # against each validator's module name, so `brands` is the token that works. The
+          # `comment` input documented beside it is read *nowhere* in hacs/integration — it
+          # is vestigial, so it is not set here, and this workflow needs no
+          # `pull-requests: write` for a comment the action has no code to post.
