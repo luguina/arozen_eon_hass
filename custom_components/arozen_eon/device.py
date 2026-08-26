@@ -24,6 +24,8 @@ from typing import Any
 
 import tinytuya
 
+from .const import TUYA_PORT
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -48,7 +50,9 @@ class ArozenDevice:
     ) -> None:
         self.host = host
         self.device_id = device_id
-        device = tinytuya.Device(device_id, host, local_key)
+        # Passed rather than left to tinytuya's identical default: a default is the
+        # library's choice, and the port is the protocol's. See TUYA_PORT in const.py.
+        device = tinytuya.Device(device_id, host, local_key, port=TUYA_PORT)
         device.set_version(float(protocol_version))
         device.set_socketTimeout(timeout)
         device.set_socketPersistent(False)
