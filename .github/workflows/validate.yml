@@ -28,29 +28,52 @@ jobs:
       # one tag on that repository (1.0.0) predates the action's current shape.
       - uses: home-assistant/actions/hassfest@master
 
-# There is no `hacs/action` job here. That was a considered removal rather than an omission, and
-# it is now a TODO rather than a settled state — the condition that justified it has expired.
-# The history is kept because it is the argument for restoring the job *correctly*.
-#
-#   Its metadata checks go through the authenticated GitHub API, but every *file content*
-#   check downloads from https://raw.githubusercontent.com/{repo}/{ref}/{path} with no
-#   credentials. Those URLs therefore 404 for any repository the unauthenticated fetch
-#   cannot read — which this one was, for the whole of the development that produced it. The
-#   download returns None, and the validator reports as invalid a file it never saw: a
-#   property of the action, not of the repository it is aimed at. That is what the first run
-#   here hit — it failed on exactly `hacsjson` and `integration_manifest`, the two
-#   content-based checks, while every tree- and metadata-based check passed.
-#
-# Ignoring those two would have left five of seven checks suppressed: a job that validates
-# almost nothing while looking like it validates something. So the checks moved to
-# tests/test_packaging.py, which applies HACS's own schemas to the working tree — the real
-# rules, on the actual files, with no network and no dependence on who can read the
-# repository. That file documents the trade.
-#
-# **Publishing ends that condition**: an unauthenticated fetch resolves against a public
-# repository, so the action can do the job it could not do while this was private. Restoring it
-# is #29 in the private development archive — deliberately its own change rather than a line in
-# the publication, because a job either passes against the real repository or it does not, and
-# that is not knowable until the repository exists. It would then also cover `brands` and
-# `license`, which a local test cannot. tests/test_packaging.py stays either way: it runs offline
-# on every PR, and the two overlap rather than duplicate.
+  hacs:
+    name: hacs (repository)
+    # This job was removed once and is back, and both halves were right when they happened.
+    #
+    #   HACS's metadata checks go through the authenticated GitHub API, but every *file
+    #   content* check downloads from https://raw.githubusercontent.com/{repo}/{ref}/{path}
+    #   with no credentials. Those URLs 404 for any repository the unauthenticated fetch
+    #   cannot read, the download returns None, and the validator reports as invalid a file
+    #   it never saw: a property of the action, not of the repository it is aimed at. That is
+    #   what the first run here hit — it failed on exactly `hacsjson` and
+    #   `integration_manifest`, the two content-based checks, while every tree- and
+    #   metadata-based check passed. Ignoring those two would have left five of seven checks
+    #   suppressed, a job that validates almost nothing while looking like it validates
+    #   something, so they moved to tests/test_packaging.py instead.
+    #
+    # Publication ended that condition, so the job now does the work it could not do before,
+    # and covers `brands` and `license`, which a local test cannot. tests/test_packaging.py
+    # stays: it needs no network and no repository, it runs on every pull request including
+    # the ones that break the manifest, and the two overlap rather than duplicate.
+    #
+    # **The condition is the repository name rather than `.private`, deliberately.** This file
+    # travels to the public repository and it also runs in the private archive it is generated
+    # from, where an unauthenticated fetch 404s exactly as it always did — so the job has to
+    # know which of the two it is in. `github.repository` belongs to the `github` context
+    # rather than to the event payload, so it reads the same on `push`, `pull_request`,
+    # `schedule` and `workflow_dispatch` alike; and the name is already load-bearing in
+    # manifest.json, const.py and the README badges, so this is one more reader of a fact the
+    # tree already commits to rather than a new coupling. In the archive the job reports as
+    # skipped, which is the honest state: not passed, not failed, not applicable.
+    if: ${{ github.repository == 'luguina/arozen_eon_hass' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # @main is the documented usage, and the newest tag on that repository (22.5.0, 2022)
+      # predates the action's current shape — the same situation as hassfest above.
+      - uses: hacs/action@main
+        with:
+          category: integration
+          # `brands` looks for an icon and a logo under this domain in home-assistant/brands,
+          # and there are none. Submitting them is deliberately not done: brand assets are
+          # required for HACS's *default store* and optional for a custom repository, which is
+          # how this is installed, and the cost is artwork rather than code. Recorded as a
+          # decision rather than left to look like an oversight — deleting this one word is
+          # the whole of the change if the default store is ever pursued.
+          ignore: brands
+          # No pull-request comment. The action posts one by default, which needs
+          # `pull-requests: write` — a scope this workflow otherwise has no use for, bought
+          # for a comment restating a check status already on the page.
+          comment: "false"
