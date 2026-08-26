@@ -46,7 +46,7 @@ working the whole time.
 
 **What actually makes local polling viable is that this device does not sleep, and unlike
 "mains-powered" that is a measurement.** The remote walk of 2026-08-21
-([capture](captures/remote-walk-2026-08-21.jsonl)) polled it every 2 s for 44 minutes, and
+(capture `captures/remote-walk-2026-08-21.jsonl`) polled it every 2 s for 44 minutes, and
 `dp_watch.py` emits a JSON line for every poll that throws or comes back without `dps` — the
 capture contains **none**. The poller runs with `set_socketPersistent(False)`, so every one of
 those polls was a fresh TCP connect and handshake rather than a socket held open across a doze.
@@ -59,7 +59,7 @@ state a sleeping Tuya device drops off the LAN in. It answered every poll.
 longest unbroken observation there is; nothing has watched an idle overnight on battery. The
 no-sleep finding is solid at the scale measured and untested beyond it, which is why a future
 "it went unavailable by morning" has a suspect ready
-([dossier §1](research/dossier.md)).
+(dossier §1).
 
 **What would change this.** The device refusing local connections, or shipping a protocol
 version whose session keys we cannot derive. Then the fallback ladder is: LocalTuya →
@@ -209,7 +209,7 @@ a single status record: intensity cleared to `L1`, the countdown re-armed (DP 4 
 240 minutes), and on two of six captured off-edges the LED (DP 7) went down with power too.
 This happens whoever turns the device on — Home Assistant, the phone app, or the physical
 remote — and the app does not undo any of it either
-([remote walk](captures/remote-walk-2026-08-21.jsonl)). So the question is not "can we avoid
+(remote walk `captures/remote-walk-2026-08-21.jsonl`). So the question is not "can we avoid
 causing this" — we never caused it — but **which of the device's own defaults, if any, the
 integration should overrule on the user's behalf.**
 
@@ -273,7 +273,7 @@ sufficient and the scope narrows to Home-Assistant-initiated power-ons only.
 public repository named `arozen_eon_hass`**
 
 **Context.** An audit that day found the repo breaking its own redaction rule
-([captures/README.md](captures/README.md#redaction-rule)), which grants each identifier **one**
+(captures/README.md), which grants each identifier **one**
 authoritative location. Three device IDs were in the tracked tree: this diffuser's, restated a
 second time in `datapoints.md`, and two belonging to *other* appliances on the same Tuya account,
 which had no sanctioned location at all. All three are also in **every commit back to the initial
@@ -335,9 +335,9 @@ private as the archive: the public history has no pull refs carrying anything, a
 PR and review record survives here. The scrub then happens once, at the moment it matters, on a
 history being rewritten anyway — where doing it now means doing it twice.
 
-**What travels is a list, and the list is in the tree.** [`tools/published_set.txt`](../tools/published_set.txt)
+**What travels is a list, and the list is in the tree.** `tools/published_set.txt`
 names the published file set and carries the reasoning for everything held back;
-[`tools/publish_check.py`](../tools/publish_check.py) builds exactly that set into a scratch
+`tools/publish_check.py` builds exactly that set into a scratch
 repository and runs its suite there, which is the check step above made repeatable. Both exist
 because #41 found the list living in a shell snippet in an issue body: it had drifted, and the
 first time anyone ran it the published set came back with two collection errors and three
@@ -450,4 +450,4 @@ answer and this entry should be superseded rather than argued with.
 |---|---|---|
 | [ADR-004](#adr-004--pending--must-the-phone-app-keep-working) | Must the phone app keep working? | The project owner, informed by a coexistence measurement — now half-made: with the app open, local writes failed intermittently (null/914); with it closed, they landed (dossier §6.3) |
 | ~~On-device schedules vs Home Assistant automations~~ | **Resolved 2026-08-21 by evidence:** the app's schedule moved no DP during the control walk — scheduling is cloud/app-side, so HA automations + the countdown DP (dossier §6.6) |
-| — | ~~Whether to make this repo public~~ | **Resolved 2026-08-24: yes, as a fresh repository — [`arozen_eon_hass`](https://github.com/luguina/arozen_eon_hass), with the original repository kept private as the archive** ([ADR-007](#adr-007--do-not-rewrite-git-history-scrub-at-publication-on-a-fresh-repository)). Two conditions, not one, and both hold. (a) Confirming no `local_key` has ever been committed — ✅ clean, tree and history, audited 2026-08-22. (b) The one-authoritative-location rule in [captures/README.md](captures/README.md#redaction-rule) actually holding. ✅ in the tree, and enforced by `tests/test_redaction_rule.py`; **not** in history, and deliberately so — publishing *this* repo can never be clean, because its `refs/pull/*/head` carry the identifiers and no force-push or API call removes them. That is what makes a fresh repository the answer rather than a flip of this one. The gate named only (a) until #20, which meant the repo could satisfy its own precondition with the `device_id` rule broken |
+| — | ~~Whether to make this repo public~~ | **Resolved 2026-08-24: yes, as a fresh repository — [`arozen_eon_hass`](https://github.com/luguina/arozen_eon_hass), with the original repository kept private as the archive** ([ADR-007](#adr-007--do-not-rewrite-git-history-scrub-at-publication-on-a-fresh-repository)). Two conditions, not one, and both hold. (a) Confirming no `local_key` has ever been committed — ✅ clean, tree and history, audited 2026-08-22. (b) The one-authoritative-location rule in captures/README.md actually holding. ✅ in the tree, and enforced by `tests/test_redaction_rule.py`; **not** in history, and deliberately so — publishing *this* repo can never be clean, because its `refs/pull/*/head` carry the identifiers and no force-push or API call removes them. That is what makes a fresh repository the answer rather than a flip of this one. The gate named only (a) until #20, which meant the repo could satisfy its own precondition with the `device_id` rule broken |
