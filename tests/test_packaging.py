@@ -21,13 +21,18 @@ strictly better here — the real rules, on the actual files, with no network an
 dependence on who can read the repository. The cost is that a schema change upstream will
 not reach us on its own; that is the trade, and it is written here so it is not forgotten.
 
-**That reason has an expiry date, and publication is it.** Once the repository is public the
-raw URLs resolve for an unauthenticated client and `hacs/action` can do what it could not do
-here; restoring it is #29 in the private development archive, and
-`.github/workflows/validate.yml` carries the same note beside the job that is missing. These
-tests stay when it comes back rather than being replaced by it — they need no network and no
-repository at all, they run on every pull request including the ones that break the manifest,
-and the overlap is not duplication.
+**That reason had an expiry date, and publication was it — the job is back.** The raw URLs
+resolve for an unauthenticated client against the public repository, so `hacs/action` runs
+again in `.github/workflows/validate.yml`, where the comment beside it carries this history.
+It is guarded by the repository name, because this file runs in the private archive too and
+the 404s there are exactly what they always were.
+
+**These tests are not replaced by it, and the difference is not politeness.** They need no
+network and no repository, so they are the half that still runs on every pull request
+*here* — including the ones that break the manifest, which is where a packaging error is
+cheapest to catch. The action covers what a local test cannot reach: `brands`, `license`,
+and the schemas as HACS currently has them rather than as they were transcribed. Each is
+the other's blind spot.
 """
 
 from __future__ import annotations
