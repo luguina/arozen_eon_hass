@@ -9,26 +9,33 @@ about a third-party library are written down and nowhere else:
   dps dict", not "did no exception fire";
 * **`status()` answers with a dict carrying a `dps` key**, which is the only part of the
   reply the integration reads;
-* **a write is confirmed by reading back**, so `set_value` is checked for the same shape.
+* **a write is confirmed by reading back**, so `set_value` is checked for the same shape;
+* **the local port is 6668**, which the integration now states itself rather than inheriting
+  (#52) - and which is therefore checked against the installed library, since a port pinned
+  at our layer is one a tinytuya release could move without us noticing.
 
-All three are assertions about a library this repository does not control. They lived in a
+All four are assertions about a library this repository does not control. They lived in a
 docstring, which a tinytuya release cannot fail. Here they fail.
 
 The fake below stands in for `tinytuya.Device` because the real one opens a socket in its
 constructor path and this suite has no diffuser. It mirrors the 1.20.0 signatures the
 integration actually calls - `set_version`, `set_socketTimeout`, `set_socketPersistent`,
 `status`, `set_value` - and nothing else, so a tinytuya release that renames one of them
-breaks these tests rather than passing them against a fake that has drifted.
+breaks these tests rather than passing them against a fake that has drifted. The one
+deliberate deviation is the constructor's `port` default, and the reason is written at it.
 """
 
 from __future__ import annotations
 
 import asyncio
+import inspect
 import threading
 
 import pytest
+import tinytuya
 
 from custom_components.arozen_eon import device as device_module
+from custom_components.arozen_eon.const import TUYA_PORT
 from custom_components.arozen_eon.device import ArozenDevice, ArozenUnreachable
 
 #: A status reply in the shape the integration reads: DP ids as strings, mixed value types.
@@ -47,10 +54,16 @@ class FakeTuyaDevice:
     mock.
     """
 
-    def __init__(self, dev_id, address, local_key):
+    #: `port` defaults to `None` here and to **6668** in the real `tinytuya.Device`, and the
+    #: difference is the only thing that makes the port test below mean anything. With
+    #: tinytuya's real default, "passed explicitly" and "left to the library" leave the same
+    #: attribute behind, and an assertion that the constant arrived would pass just as
+    #: happily against a `device.py` that had dropped the keyword altogether.
+    def __init__(self, dev_id, address, local_key, port=None):
         self.dev_id = dev_id
         self.address = address
         self.local_key = local_key
+        self.port = port
         self.version = None
         self.timeout = None
         self.persistent = None
@@ -87,8 +100,8 @@ def fake_tuya(monkeypatch):
     """Replace `tinytuya.Device` as `device.py` looks it up, and hand back the instance."""
     made: list[FakeTuyaDevice] = []
 
-    def _factory(dev_id, address, local_key):
-        made.append(FakeTuyaDevice(dev_id, address, local_key))
+    def _factory(dev_id, address, local_key, port=None):
+        made.append(FakeTuyaDevice(dev_id, address, local_key, port))
         return made[-1]
 
     monkeypatch.setattr(device_module.tinytuya, "Device", _factory)
@@ -129,6 +142,45 @@ def test_the_connection_parameters_reach_tinytuya_in_the_right_slots(fake_tuya):
         "test-device-id",
         "192.0.2.10",
         "0123456789abcdef",
+    )
+
+
+def test_the_port_is_stated_here_rather_than_left_to_the_library(fake_tuya):
+    """#52. This changes no behaviour today - tinytuya defaults `port` to 6668 itself - so
+    what it changes is which layer is responsible for the number.
+
+    Until this argument existed, `TUYA_PORT` in const.py was a documented constant that
+    documented nothing: the socket took its port from tinytuya, and the comment describing
+    it could have said any number at all without a test or a device disagreeing.
+    """
+    _, tuya = _device(fake_tuya)
+    assert tuya.port == TUYA_PORT, "the port reaches tinytuya from const.py, or not at all"
+
+
+def test_tinytuya_still_defaults_to_the_port_this_integration_states():
+    """The cost of stating it at our layer, paid back here.
+
+    A tinytuya release that moved its local port used to reach this integration as a broken
+    connection; now it would reach it as nothing at all, because the explicit argument keeps
+    the socket on 6668 whatever the library thinks. So the agreement is asserted directly,
+    against the installed tinytuya rather than the fake - a pin is only as good as the
+    moment somebody bumps `tinytuya==` in the manifest, and this is the assertion that
+    fires in that commit.
+
+    Read out of the real signature, which also covers a rename. The fake above mirrors the
+    methods `ArozenDevice` calls, but nothing makes it mirror the constructor's keywords: a
+    tinytuya that renamed `port=` would be a `TypeError` on a user's device and a green
+    suite here.
+    """
+    params = inspect.signature(tinytuya.Device.__init__).parameters
+    assert "port" in params, (
+        f"tinytuya {tinytuya.__version__} no longer takes a `port` keyword - device.py "
+        "passes one, so this is a TypeError in production, not a style question"
+    )
+    assert params["port"].default == TUYA_PORT, (
+        f"tinytuya {tinytuya.__version__} defaults its local port to "
+        f"{params['port'].default!r}, not {TUYA_PORT}. device.py overrides that, so nothing "
+        "here breaks - settle whether the protocol moved before shipping this version"
     )
 
 

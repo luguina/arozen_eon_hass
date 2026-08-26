@@ -18,7 +18,22 @@ CONF_DEVICE_ID: Final = "device_id"
 CONF_LOCAL_KEY: Final = "local_key"
 CONF_PROTOCOL_VERSION: Final = "protocol_version"
 
-#: Tuya local protocol port. Not configurable - every Tuya WiFi device listens on it.
+#: Tuya's local protocol port, passed explicitly to `tinytuya.Device` in device.py rather
+#: than left to the library's default. Measured on this unit rather than assumed of Tuya
+#: devices in general - the previous claim here, that every Tuya WiFi device listens on it,
+#: was inherited from tinytuya's documentation and never checked. What was checked is this
+#: diffuser, found listening on TCP 6668 during the 2026-08-21 LAN sweep
+#: (docs/research/dossier.md §6.3), which is the reading the whole local transport rests on.
+#:
+#: tinytuya defaults to the same number (`tinytuya/core/const.py`) and describes the keyword
+#: in its own constructor as "default - do not expect caller to pass in". Passing it anyway
+#: costs one argument and makes the number this file states the one the socket connects to;
+#: until then the constant documented nothing, because no behaviour depended on it.
+#: `tests/test_device.py` asserts both halves - that it reaches the device object, and that
+#: tinytuya's own default still agrees with it - so a version bump that moved the port is a
+#: red build here rather than a silent divergence between this file and the socket.
+#:
+#: Not configurable: there is no form field for it, and the protocol does not offer one.
 TUYA_PORT: Final = 6668
 
 #: Observed on the LAN 2026-08-21 (docs/research/dossier.md §6). Offered as the config-flow
