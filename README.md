@@ -70,7 +70,7 @@ status, so a wrong key or version fails there rather than silently later.
 |---|---|---|
 | **IP address** | `192.168.x.x` — where the diffuser sits on your LAN | Steps 2–3 |
 | **Device ID** | 22 characters starting `bf` — its permanent identity in Tuya's world | Steps 2–3 |
-| **Local key** | 16 characters. ⚠️ A **live credential** — see [below](#about-the-local_key) | Steps 2–3 |
+| **Local key** | 16 characters. ⚠️ A **live credential**, not an identifier — anyone holding it, with access to your LAN, can drive the diffuser. Password manager, nowhere else | Steps 2–3 |
 | **Protocol version** | `3.3`, `3.4` or `3.5` — **`3.5` for this unit**, and the default the form offers | Step 4 |
 
 **None of this needs Python** on Home Assistant OS or Supervised. The one command-line route is
@@ -318,83 +318,6 @@ The protocol version and the poll interval are deliberately left in the clear. T
 two settings a support conversation actually turns on, and a dump that redacts everything is a
 file with nothing in it.
 
-## About the `local_key`
-
-> ⚠️ **The one thing that must never enter this repository is the Tuya `local_key`** — not in
-> a file, not in a capture, not truncated, not partially masked, not in a comment. It never
-> has, on any ref, and that is audited rather than assumed.
-
-It is not a device identifier — it is a **live credential**. It authenticates and encrypts
-local control, and anyone holding it plus LAN access can drive the diffuser. Home Assistant
-stores it in the config entry like any other integration secret, which is fine; a git
-repository is not, and a public one least of all. That is why the rule is an absolute rather
-than a redaction practice: truncation is not redaction, it only narrows a search space, and a
-key that reaches a commit is compromised whether or not anyone noticed.
-
-| Artefact | Rule |
-|---|---|
-| `local_key` | **Never committed, in any file, ever** — not truncated, not partially masked |
-| `device_id`, Tuya `uid` | Redact in captures; recorded once in the dossier |
-| LAN IP, SSID | Redact |
-| `devices.json`, `snapshot.json`, `tinytuya.json` | **Gitignored** — the wizard writes local keys into these in plaintext |
-
-`.gitignore` covers the tooling's default output filenames, but do not rely on that alone —
-the wizard will happily write a key into any path you point it at. Audit before publishing,
-because it is one command and the answer changes every time somebody adds a file:
-
-```sh
-git ls-files -z | xargs -0 grep -niE \
-  'local_key|localkey|"uid"|[0-9a-f]{16,22}|\b(10|192\.168|172\.(1[6-9]|2[0-9]|3[01]))(\.[0-9]{1,3}){2}\b'
-```
-
-It reports **candidates for a human to look at**, not confirmed leaks. A false positive costs a
-glance; a false negative publishes a working credential to the device in your house. Deliberately
-noisy, then — but it is worth knowing *how* noisy before you skim it, because a rate you have not
-measured is one you assume is low. On the tree as this was written it returns **70 lines, 6 of
-which are identifiers**: the one sanctioned entry in dossier §6.2, and five synthetic ids in the two test
-files that need identifier-shaped strings to test redaction with. The other 64 are the *word*
-`local_key`, in code that reads a credential out of an untracked file rather than containing one.
-So about one line in twelve is an identifier, and they do not look different from the rest — read
-all 70 rather than scanning for something that jumps out.
-
-**It scans the working tree only, and that is a different question from the one you are asking.**
-A file cleaned up at the tip still carries its old contents in every commit before the cleanup, so
-this sweep can report a clean repo while the value stays one `git log -p` away. That is not
-hypothetical — it is exactly what #20 found in this project's development history, which is kept
-in the private archive rather than rewritten
-([ADR-007](docs/decisions.md#adr-007--do-not-rewrite-git-history-scrub-at-publication-on-a-fresh-repository)
-has the measurement behind that). The companion, over every blob on every ref:
-
-```sh
-git grep -nIE 'bf[0-9a-z]{20}|"(local_)?key"' $(git rev-list --all) \
-  | sed 's/^[0-9a-f]\{40\}://' | sort -u
-```
-
-Narrower than the tree sweep on purpose. The broad regex over forty-odd commits returns several
-hundred lines that are mostly the same file forty times, and a report that long gets skimmed rather
-than read; dropping the commit SHA and deduping collapses one leak in thirty commits down to one
-line, which is the difference between **a few dozen lines and several hundred** — small enough to
-read, which is the whole trick.
-
-No exact figure is quoted for it on purpose. Both counts move with **every commit**, including the
-one that adds a line above a hit and thereby mints a fresh `path:line` entry under dedup — so a
-number written down here is stale by the time the change that measured it merges. That is not a
-reason to distrust the command; it is the reason it is a command. Run it.
-
-It answers *"was this ever committed"*, not *"in which commits"*; `git log -S<value> --all` is the
-follow-up once you know there is something to chase.
-
-The two halves of that pattern do different jobs, and the second one has never fired in anger. A
-`bf`-prefixed hit is a **Tuya device id**. A `"key"` hit has **never once matched a value** — every
-one is the field name in a tool reading credentials from an untracked file. That is the point of
-including it: a hit that *was* a value would look nothing like the others, and it would mean the
-`local_key` had been committed.
-
-The capture-specific rules are in [docs/captures/README.md](docs/captures/README.md#redaction-rule),
-and `tests/test_redaction_rule.py` enforces the one-authoritative-location half of them on every
-test run — so a *third* copy of the device id fails CI, rather than waiting for somebody to
-remember to run any of this.
-
 ## Status
 
 **Working, in daily use, with one unidentified datapoint left.**
@@ -446,7 +369,7 @@ docs/
                                         cloud schema, the topology, and the prior art
   datapoints.md                   the DP map, its evidence, and its open questions
   research/dossier.md             the recon record, including §6.7's correction
-  hardware.md · decisions.md      the device itself; ADR-001…006
+  hardware.md · decisions.md      the device itself; ADR-001…008
   captures/                       probe output and DP diffs (credentials redacted)
 tools/                            dp_dump · dp_diff · dp_watch · dp_set · mq_listen —
                                   the recon loop, spelled out in tools/README.md.
@@ -455,6 +378,12 @@ tools/                            dp_dump · dp_diff · dp_watch · dp_set · mq
 tests/                            pytest. test_dp.py runs with no Home Assistant
                                   installed; the entity tests need the pinned core
 ```
+
+**`tools/`, `docs/captures/`, `docs/research/` and `docs/hardware.md` live only in the private
+development archive.** They are recon evidence about one physical diffuser — its identifiers, its
+LAN, its raw traffic — and the scaffolding that produced them, three tools of which write to a
+live appliance. The reasoning and the arrangement are in `docs/decisions.md`, which does travel,
+so the decision can be read even where its subject cannot.
 
 ## Scope
 
@@ -470,13 +399,13 @@ Two rules carry most of the weight here, both learned by breaking them:
 1. **`dp.py` is the only file that may contain a DP number.** A map correction then lands in
    exactly one place. It also separates *command* datapoints from *status* ones — the
    distinction the first pass did not make, which cost it the power switch entirely
-   ([dossier §6.7](docs/research/dossier.md)).
+   (dossier §6.7).
 2. **A claim about the device belongs in [`docs/datapoints.md`](docs/datapoints.md) with the
    evidence that established it.** "Toggled power in the app, DP 2 flipped" is evidence.
    "Probably intensity" is not, and should say so — the ❓ column exists to be used.
 
 Design decisions are recorded as ADRs in [`docs/decisions.md`](docs/decisions.md). The recon
-tools and their rules are in [`tools/README.md`](tools/README.md); `tests/test_dp.py` runs
+tools and their rules are in `tools/README.md`; `tests/test_dp.py` runs
 against `dp.py` alone with no Home Assistant installed, which makes it the cheapest place to
 pin a fact about the device.
 

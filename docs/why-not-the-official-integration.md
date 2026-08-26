@@ -35,7 +35,7 @@ match and you get an empty device**. Which is what you get.
 
 > ✅ **Confirmed and sharpened, 2026-08-21.** The device is registered as `xxj` as assumed,
 > but cloud queries show its registered instruction set is **empty**: `functions: []`,
-> `status: []` ([dossier §6.4](research/dossier.md#64-the-products-registered-cloud-schema-is-empty---the-real-no-entities-cause)).
+> `status: []` (dossier §6.4).
 
 It is not that the firmware uses non-standard DP codes that miss the three switches. **The OEM
 declared no DPs at all.**
@@ -113,4 +113,4 @@ nothing about the firmware.
 
 The full map, its evidence, and its remaining unknowns are in [datapoints.md](datapoints.md); the
 recon narrative, including both corrections it took, is in
-[research/dossier.md](research/dossier.md).
+research/dossier.md.
