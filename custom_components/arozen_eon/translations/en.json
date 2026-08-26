@@ -41,6 +41,60 @@
       }
     }
   },
+  "entity": {
+    "binary_sensor": {
+      "misting": {
+        "name": "Misting"
+      },
+      "charging": {
+        "name": "Charging"
+      }
+    },
+    "select": {
+      "intensity": {
+        "name": "Intensity"
+      },
+      "timer": {
+        "name": "Timer"
+      }
+    },
+    "sensor": {
+      "battery": {
+        "name": "Battery"
+      },
+      "timer_remaining": {
+        "name": "Timer remaining"
+      },
+      "failed_polls": {
+        "name": "Failed polls"
+      },
+      "intensity_restores": {
+        "name": "Intensity restores"
+      },
+      "datapoints": {
+        "name": "Datapoints (recon)"
+      }
+    },
+    "switch": {
+      "led": {
+        "name": "LED"
+      }
+    }
+  },
+  "exceptions": {
+    "unknown_option": {
+      "message": "{option} is not an option this integration knows for {entity_id}. Home Assistant filters options against the entity's own list before calling, so this means the datapoint map is wrong rather than the request."
+    },
+    "set_option_failed": {
+      "message": "Failed to set {entity_id} to {option}: {error}"
+    },
+    "turn_on_failed": {
+      "message": "Failed to turn on {entity_id}: {error}"
+    },
+    "turn_off_failed": {
+      "message": "Failed to turn off {entity_id}: {error}"
+    }
+  },
   "issues": {
     "device_unreachable": {
       "title": "The diffuser at {host} has stopped answering",

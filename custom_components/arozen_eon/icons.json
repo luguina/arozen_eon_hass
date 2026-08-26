@@ -1,0 +1,36 @@
+{
+  "entity": {
+    "binary_sensor": {
+      "misting": {
+        "default": "mdi:air-humidifier"
+      }
+    },
+    "select": {
+      "intensity": {
+        "default": "mdi:air-filter"
+      },
+      "timer": {
+        "default": "mdi:timer-cog-outline"
+      }
+    },
+    "sensor": {
+      "failed_polls": {
+        "default": "mdi:radar"
+      },
+      "intensity_restores": {
+        "default": "mdi:backup-restore"
+      },
+      "timer_remaining": {
+        "default": "mdi:timer-outline"
+      },
+      "datapoints": {
+        "default": "mdi:database-search-outline"
+      }
+    },
+    "switch": {
+      "power": {
+        "default": "mdi:scent"
+      }
+    }
+  }
+}

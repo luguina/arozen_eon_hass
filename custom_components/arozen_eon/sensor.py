@@ -74,8 +74,7 @@ class ArozenDiagnosticSensor(ArozenEntity, SensorEntity):
 class ArozenFailedPollsSensor(ArozenDiagnosticSensor):
     """How many status polls have failed since the integration loaded."""
 
-    _attr_name = "Failed polls"
-    _attr_icon = "mdi:radar"
+    _attr_translation_key = "failed_polls"
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
 
     def __init__(self, coordinator: ArozenCoordinator) -> None:
@@ -111,8 +110,7 @@ class ArozenIntensityRestoresSensor(ArozenDiagnosticSensor):
     not a lie, but says nothing about why. ``last_error`` says why.
     """
 
-    _attr_name = "Intensity restores"
-    _attr_icon = "mdi:backup-restore"
+    _attr_translation_key = "intensity_restores"
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
 
     def __init__(self, coordinator: ArozenCoordinator) -> None:
@@ -149,7 +147,7 @@ class ArozenBatterySensor(ArozenEntity, SensorEntity):
     cell as backup to mains. DP 102 reports which of the two it is on.
     """
 
-    _attr_name = "Battery"
+    _attr_translation_key = "battery"
     _attr_device_class = SensorDeviceClass.BATTERY
     _attr_native_unit_of_measurement = "%"
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -167,8 +165,7 @@ class ArozenBatterySensor(ArozenEntity, SensorEntity):
 class ArozenCountdownRemainingSensor(ArozenEntity, SensorEntity):
     """Minutes left on the auto-off timer (DP 5). Zero when untimed."""
 
-    _attr_name = "Timer remaining"
-    _attr_icon = "mdi:timer-outline"
+    _attr_translation_key = "timer_remaining"
     _attr_device_class = SensorDeviceClass.DURATION
     _attr_native_unit_of_measurement = UnitOfTime.MINUTES
 
@@ -219,8 +216,7 @@ class ArozenDatapointsSensor(ArozenDiagnosticSensor):
     the wrong knob for the reason below.
     """
 
-    _attr_name = "Datapoints (recon)"
-    _attr_icon = "mdi:database-search-outline"
+    _attr_translation_key = "datapoints"
     #: Deliberately not ``entity_registry_visible_default``, which is the other way to keep it
     #: off the device page. Hidden is worse than disabled here: a hidden entity still holds a
     #: state, still fills the recorder and still answers to automations, so it costs the
