@@ -267,7 +267,8 @@ sufficient and the scope narrows to Home-Assistant-initiated power-ons only.
 
 **Status:** accepted · **Date:** 2026-08-22 · **Updated 2026-08-24 — publication decided, the
 public repository named `arozen_eon_hass`** ·
-**Updated 2026-08-28 — published; the public history is a regenerated artifact**
+**Updated 2026-08-28 — published; the public history is a regenerated artifact** ·
+**Updated 2026-08-29 — the prose manifest, and what a path filter cannot reach**
 
 **Context.** An audit that day found the repo breaking its own redaction rule
 (captures/README.md), which grants each identifier **one**
@@ -416,6 +417,54 @@ object stream while its caller quietly turned the error into a zero. A redaction
 open is indistinguishable from a pass, and nothing downstream catches it. So the sweep runs twice
 over the same list: against the artifact, where it must find nothing, and against the archive,
 where it must find something.
+
+**Update — 2026-08-29. De-identification needed a second manifest, because a path filter does not
+edit prose.** #72 took a sibling project's name and the owner's out of the published *files* and
+that read as finished. It was half the job. The scrub truncates a history — it drops the commits
+that touched nothing published and the paths the manifest holds back — but every commit it keeps
+keeps its content, so a `git log -p` over the artifact still reached the words in every earlier
+revision, and five commit messages carried them regardless of which files those commits touched.
+341 occurrences of the one and 135 of the other, measured on the published clone.
+
+So the second list: `tools/history_phrases.txt`, phrase-to-replacement lines the scrub feeds to
+both `--replace-text` and `--replace-message`. Prose rather than a name, and that distinction is
+the whole design, because **`--replace-text` is blind to path**. A rule for the bare name would
+have rewritten `LICENSE`'s copyright line, which #72 kept on purpose — an MIT grant with no
+grantor is worse than no change at all. Every rule is therefore anchored on a comma, a possessive
+or a preposition, and hard-wrapped prose puts newlines in the middle of phrases, so a rule has to
+be anchored on the half of its phrase that survives the wrap or it silently matches nothing.
+
+**The list is ordered by the tool, not by the file: longest phrase first.** filter-repo applies
+replacements in the order it reads them, so a catch-all placed ahead of a specific rule eats the
+specific rule's left edge and leaves prose that is grammatical enough to survive a skim and wrong
+enough to notice a year later. Sorting in the tool means an editor of the list cannot get that
+wrong by moving a line.
+
+**And the same shape of check as the ids: ask from the other side, and prove the question can
+fail.** A sweep derived from the substitution list cannot see a phrase the list forgot, so the
+file also names the terms that must not survive and the paths still allowed to hold them —
+`LICENSE`, and nothing else. That sweep runs over every reachable blob *by path* and every commit
+message, and it runs on both sides of the rewrite: it has to find nothing after, and it has to
+find something before. The second half is the 2026-08-28 lesson above made permanent, one check up
+from a shell pipeline that could report clean by breaking.
+
+**The cost is a force-push and both tags moved, and one published tree genuinely changes.** Every
+substitution lands in an object, so every commit from the first affected one onward gets a new
+SHA — the manifest-change case above, arrived at from the other direction. `v0.1.1`'s tree is
+untouched, because #72 had already cleaned the tip; `v0.1.0`'s is not, because it predates #72 and
+still delivered the names in nine files. Its tag has to move with everything else — a tag left
+pointing at the old chain is a ref, and a ref keeps that chain reachable, which would defeat the
+exercise — so the release's content changes under a version number that does not. That is
+acceptable here because the change is documentation and comments only, and the alternative is a
+purge that does not purge.
+
+**What this deliberately does not do.** It reduces incidental attribution; it does not make the
+project anonymous, and describing it as anonymisation would be the more dangerous error. The
+account name is in the repository URL, in `manifest.json`'s required `documentation` and
+`issue_tracker`, in the badges and in the HACS install line, and it cannot leave without a new
+account and a repository transfer. `LICENSE` keeps its grantor. The commit author identity stays
+what the mailmap collapses every commit to, which is a name — a decision taken with the rest and
+the one lever still available for free while a history is being rewritten anyway.
 
 **What would change this.** Deciding to publish *this* repository, PR history and all, rather than a
 fresh one — at which point the calculation changes completely and the pull refs, not `main`, become
