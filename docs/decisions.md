@@ -25,8 +25,8 @@ an inversion of the project's point. The official Tuya integration already talks
 device; it just has nothing useful to say about it.
 
 **What made this look viable, as filed — and the premise is false.** The device is
-**mains-powered** (confirmed 2026-08-10). A battery-powered Tuya device sleeps, drops off
-the LAN between wakeups, and cannot be polled locally — which would have forced the cloud path
+**mains-powered** (reported 2026-08-10, never measured). A battery-powered Tuya device
+sleeps, drops off the LAN between wakeups, and cannot be polled locally — which would have forced the cloud path
 regardless of preference. That question was the single largest risk to this whole approach and it
 resolved in our favour before any work started.
 
