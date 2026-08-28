@@ -25,10 +25,10 @@ an inversion of the project's point. The official Tuya integration already talks
 device; it just has nothing useful to say about it.
 
 **What made this look viable, as filed — and the premise is false.** The device is
-**mains-powered** (reported 2026-08-10, never measured). A battery-powered Tuya device
-sleeps, drops off the LAN between wakeups, and cannot be polled locally — which would have forced the cloud path
-regardless of preference. That question was the single largest risk to this whole approach and it
-resolved in our favour before any work started.
+**mains-powered** (reported 2026-08-10, never measured). A battery-powered Tuya device sleeps,
+drops off the LAN between wakeups, and cannot be polled locally — which would have forced the
+cloud path regardless of preference. That question was the single largest risk to this whole
+approach and it resolved in our favour before any work started.
 
 **Correction, 2026-08-23 — right decision, wrong reason on file.** The device is not mains-only:
 **it has a battery**, and it runs off it. DP 101 is a battery gauge, closed on 2026-08-21 against
