@@ -44,16 +44,15 @@ PROTOCOL_VERSIONS: Final = ("3.3", "3.4", "3.5")
 # --- Options ----------------------------------------------------------------------------
 CONF_POLL_INTERVAL: Final = "poll_interval"
 
-#: Much cheaper than the sibling project's 900 s BLE poll: this is one TCP exchange on the LAN, not a
-#: radio connection three floors away. Still not aggressive, because many Tuya devices accept
-#: only one local connection at a time (ADR-004) and every poll competes with the phone app.
+#: Cheap, because this is one TCP exchange on the LAN rather than a radio connection at range.
+#: Still not aggressive, because many Tuya devices accept only one local connection at a time
+#: (ADR-004) and every poll competes with the phone app.
 DEFAULT_POLL_INTERVAL_S: Final = 60
 MIN_POLL_INTERVAL_S: Final = 10
 MAX_POLL_INTERVAL_S: Final = 3600
 
 #: Consecutive failed polls the entities survive before reporting `unavailable`, holding the
-#: last reading in between. Same shape as sibling_beacon's TOLERATED_POLL_FAILURES and for the
-#: same reason: one missed poll should not cost a full interval of unavailability.
+#: last reading in between. One missed poll should not cost a full interval of unavailability.
 TOLERATED_POLL_FAILURES: Final = 1
 
 #: How long the device must go on not answering before a repair issue appears in

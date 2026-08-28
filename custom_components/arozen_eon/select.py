@@ -4,8 +4,8 @@ Two enum DPs, both write-verified on the device 2026-08-21 (docs/datapoints.md):
 
 * **Intensity** — DP 3, ``L1``…``L6``. There is no intensity *number* on this device: the
   level is the whole surface, and the device mirrors it as pause seconds on DP 106
-  (L1=60 s … L6=2400 s) with a fixed 30 s burst (DP 105). Same physics as the sibling project's
-  work/pause pair, one DP instead of two. Shown as "L1 · every 1 min" because the level
+  (L1=60 s … L6=2400 s) with a fixed 30 s burst (DP 105). Same physics as a work/pause pair,
+  expressed in one DP instead of two. Shown as "L1 · every 1 min" because the level
   number counts *pause* — L1 is the strongest setting, which "L1…L6" alone would hide.
 * **Timer** — DP 4, four settings, mirrored as remaining minutes on DP 5. The firmware's
   ``"3h"`` arms **240 minutes**, which the manual calls the 4-hour setting: the string is

@@ -1,8 +1,8 @@
 """State and health for one Arozen EON Pro 2.
 
-Simpler than the sibling project's coordinator in the ways the transport is simpler: no schedule
-arbitration (the Tuya device holds one flat DP set, not four schedule records) and no presence
-tracking (there is no advertisement to watch — "is it there" is "did the TCP poll answer").
+Simpler than a BLE coordinator in the ways this transport is simpler: no schedule arbitration
+(the Tuya device holds one flat DP set, not four schedule records) and no presence tracking
+(there is no advertisement to watch — "is it there" is "did the TCP poll answer").
 
 Three things it does hold, and the first two are here because the device erases evidence on
 its own:
@@ -57,8 +57,8 @@ type ArozenConfigEntry = ConfigEntry["ArozenCoordinator"]
 class PollHealth:
     """How many polls have failed, in a row and in total.
 
-    Same design as sibling_beacon's PollHealth, minus the off-air tracking (there is no
-    advertisement to watch here — a poll that ran and failed is the only failure shape):
+    Poll health without off-air tracking, because there is no advertisement to watch here —
+    a poll that ran and failed is the only failure shape:
 
     1. **Decide whether the entities may hold a stale reading** (``may_hold_reading``), so
        one missed poll does not cost a full interval of ``unavailable``;
