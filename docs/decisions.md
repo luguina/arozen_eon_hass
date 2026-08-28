@@ -5,12 +5,6 @@ ADR-style. One entry per decision that would otherwise get re-argued. Record the
 
 Status values: `accepted` · `superseded` · `pending`.
 
-Several entries cite **`sibling_ha_controller`**, a sibling Home Assistant project in the same
-house — a BLE device behind an ESP32 proxy, where a number of these questions were argued
-first. Its ADR numbers are cited but never linked: that repository is private, so a link would
-404 for every reader who does not already have it, and it is the reasoning that is being
-borrowed rather than the document.
-
 ---
 
 ## ADR-001 — Local LAN control; the Tuya cloud is the fallback, not the plan
@@ -25,14 +19,13 @@ TCP 6668, or not at all.
 fetch the `local_key`, and never again at runtime.
 
 **Why.** No vendor account in the control path, no outage, no round trip to a datacentre, and
-it keeps working when the internet does not. This is the same call as `sibling_ha_controller`
-ADR-004 and for the same reasons — but note it is a *weaker* commitment here, because unlike
-the sibling project the cloud path is a genuinely working fallback rather than an inversion of the
-project's point. The official Tuya integration already talks to this device; it just has
-nothing useful to say about it.
+it keeps working when the internet does not. Note that it is a *weaker* commitment than
+local-first usually implies: here the cloud path is a genuinely working fallback rather than
+an inversion of the project's point. The official Tuya integration already talks to this
+device; it just has nothing useful to say about it.
 
 **What made this look viable, as filed — and the premise is false.** The device is
-**mains-powered** (confirmed by the project owner, 2026-08-10). A battery-powered Tuya device sleeps, drops off
+**mains-powered** (confirmed 2026-08-10). A battery-powered Tuya device sleeps, drops off
 the LAN between wakeups, and cannot be polled locally — which would have forced the cloud path
 regardless of preference. That question was the single largest risk to this whole approach and it
 resolved in our favour before any work started.
@@ -73,22 +66,23 @@ reflashing the WiFi module. The last of those is out of scope
 
 **Status:** accepted · **Date:** 2026-08-10
 
-**Context.** The sibling project `sibling_ha_controller` puts an ESP32 running an ESPHome
-`bluetooth_proxy` next to the diffuser, because that device speaks BLE and sits three floors
-from the Home Assistant box — out of radio range.
+**Context.** The reflex architecture for an appliance Home Assistant cannot reach is a bridge:
+an ESP32 running an ESPHome `bluetooth_proxy` next to the device. It earns its keep when the
+appliance speaks BLE and sits out of radio range — three floors from the Home Assistant box,
+say.
 
 **Decision.** Nothing gets flashed. Home Assistant talks straight to the diffuser over the LAN.
 
 **Why this ADR exists at all.** The verdict is obvious; the failure mode it guards against is
-not. Two projects, same room, same *kind* of appliance, near-identical goals — and the strong
-pull is to reach for the architecture that worked last time. It does not apply. The sibling project needed
-a bridge because BLE could not span the distance; **WiFi already spans it**, which is the entire
+not. Two appliances of the same *kind*, same house, near-identical goals — and the strong
+pull is to reach for the architecture that worked last time. It does not apply. A bridge is
+needed when BLE cannot span the distance; **WiFi already spans it**, which is the entire
 reason this device has an app that works "from anywhere". Copying the proxy across would add a
 board, a firmware, a power supply and a failure mode, in exchange for nothing.
 
-Stated plainly because a constraint that *feels* decisive often is not — the same trap the sibling project's
-ADR-002 called out from the other direction, where "3 floors away" felt like it chose the
-implementation language and did not.
+Stated plainly because a constraint that *feels* decisive often is not — the same trap from
+the other direction, where "three floors away" feels like it chooses the implementation
+language and does not.
 
 **What would change this.** Nothing plausible. If WiFi does not reach the diffuser's position,
 the fix is an access point or a mesh node, not a protocol bridge.
@@ -97,11 +91,11 @@ the fix is an access point or a mesh node, not a protocol bridge.
 
 ## ADR-003 — Defer the deliverable until the datapoint dump exists
 
-**Status:** superseded · **Date:** 2026-08-10 · **Resolved 2026-08-21 → option C, by the project owner**
+**Status:** superseded · **Date:** 2026-08-10 · **Resolved 2026-08-21 → option C**
 
-**Resolution.** The project owner called it before the dump: the deliverable is **our own integration**,
-`custom_components/arozen_eon/`, mirroring `sibling_beacon`'s architecture (coordinator +
-entity platforms + a diagnostic-sensor instrument). The gate's concern — that C might mean
+**Resolution.** Called before the dump: the deliverable is **our own integration**,
+`custom_components/arozen_eon/`, on the standard Home Assistant shape (coordinator + entity
+platforms + a diagnostic-sensor instrument). The gate's concern — that C might mean
 re-solving a solved transport — does not apply to the way it was built: the integration is a
 thin async wrapper over `tinytuya`, with the entire DP map isolated in `dp.py`, so the dump
 still decides *what the entities are*, just not *where they live*. Options A and B remain
@@ -120,14 +114,14 @@ functions create **no entities** until the dump fills the file in.
 |---|---|
 | **A — `tuya-local` device config** | A YAML file mapping DPs to Home Assistant entities, added to [`make-all/tuya-local`](https://github.com/make-all/tuya-local). ~40 lines. |
 | **B — LocalTuya config** | Manual per-entity DP mapping in the [`xZetsubou`](https://github.com/xZetsubou/hass-localtuya) fork's UI. No file to write, but nothing to upstream either. |
-| **C — our own integration** | A `custom_components/arozen_eon/` of the kind built for the sibling project. |
+| **C — our own integration** | A `custom_components/arozen_eon/` of the conventional shape. |
 
 **Decision.** Do not choose yet. Dump the datapoints first
 ([`datapoints.md`](datapoints.md)), then decide against the criteria below.
 
-**Be honest about how wide this gate actually is.** On the sibling project the equivalent gate was
-genuinely open, because the protocol could have turned out to be anything and did in fact
-demolish the front-runner. Here it is **much narrower**: the transport is a known, implemented,
+**Be honest about how wide this gate actually is.** A gate like this is genuinely open when
+the protocol could turn out to be anything, and one has demolished a front-runner before.
+Here it is **much narrower**: the transport is a known, implemented,
 encrypted protocol on TCP 6668, so option C is not "write a protocol" — it is "wrap `tinytuya`
 and re-solve problems A and B already solved". C is on this list for completeness and starts
 heavily disfavoured. The real question is A versus B.
@@ -139,8 +133,9 @@ heavily disfavoured. The real question is A versus B.
    work/pause into a single encoded string or a JSON DP that the schema cannot decompose,
    A weakens.
 2. **Does an existing config already fit?** Twelve diffuser configs ship today. If one matches
-   the DP set outright, this collapses to a configuration exercise. *(Do not lean on this. The
-   Aroma-Link hypothesis on the sibling project was exactly this shape of hope and it was wrong.)*
+   the DP set outright, this collapses to a configuration exercise. *(Do not lean on this. A
+   hypothesis of exactly this shape — an existing config that surely fits — has been wrong
+   before.)*
 3. **Is there anything worth upstreaming?** A produces an artefact another Arozen owner can use;
    B produces a screenshot. That is a real tiebreaker at equal effort, not a nicety.
 
@@ -158,13 +153,14 @@ own documentation warns that running it alongside the official Tuya integration 
 connection problems, and advises closing the manufacturer's app. So there is a plausible world
 in which local control and the Tuya Smart app cannot comfortably coexist.
 
-**Why this is not being decided by whoever writes the code.** On the sibling project the equivalent
-requirement (its ADR-006) was a hard constraint that would have rejected otherwise-good
-solutions, and it was eventually *withdrawn* by the project owner rather than engineered around. Same principle: if the answer is "the app must keep working",
-that changes which options are admissible, and it is a preference, not a finding.
+**Why this is not being decided by whoever writes the code.** A requirement of this kind is a
+hard constraint that rejects otherwise-good solutions, and the honest resolution is often that
+the owner *withdraws* it rather than the engineer working around it. Same principle: if the
+answer is "the app must keep working", that changes which options are admissible, and it is a
+preference, not a finding.
 
-**What is genuinely different from the sibling project, and it matters.** The sibling project's app talked BLE, and
-BLE is exclusive — one central, one link. Tuya's app normally reaches the device **via the
+**Why the BLE intuition does not transfer, and it matters.** A BLE app holds an exclusive
+link — one central, one connection. Tuya's app normally reaches the device **via the
 cloud**, not over the LAN, so app and local control are not obviously competing for the same
 channel. Contention is a documented risk, not a certainty. **Do not assume this is a conflict
 before measuring it.**
@@ -190,9 +186,9 @@ supported chip we have not identified, and would be undertaken to fix a problem 
 evidence exists. It stays out until local control has actually been tried and actually failed.
 
 **Scheduling — expect this to land in Home Assistant, not on the device.** Tuya's `xxj`
-category does expose a `countdown` DP, and the app clearly has schedules. But the sibling project's work
-ended at its ADR-009 — on-device schedule records were rejected in favour of Home Assistant
-automations, because on-device schedules fought with
+category does expose a `countdown` DP, and the app clearly has schedules. But this question
+has been settled before — on-device schedule records lose to Home Assistant automations,
+because on-device schedules fought with
 a reliable *off*, were overwritten by the phone app, and ran against a device clock that could
 not be verified. **At least the second of those three almost certainly applies here too**, since
 the Tuya app owns the device's schedule state and re-pushes it. Not a decision yet — flagged so
@@ -258,9 +254,9 @@ firmware, in the same record. The symmetry is misleading.
   carries the count and the error. Same principle as `sensor.…_failed_polls`: a fix that hides
   a fault ships with the meter that still records it.
 
-**What would change this.** For the countdown: evidence that restoring it is what the device's owner
-actually wants — most plausibly running on "Continuous" and being cut off at four hours often
-enough to say so. That is a preference and it is his call, not a finding. In the other
+**What would change this.** For the countdown: evidence that restoring it is what the device's
+owner actually wants — most plausibly running on "Continuous" and being cut off at four hours often
+enough to say so. That is a preference and it is the owner's call, not a finding. In the other
 direction: if the intensity restore is ever seen fighting something that also writes DP 3 (a
 Tuya scene, a schedule pushed from the app), the "somebody got there first" guard stops being
 sufficient and the scope narrows to Home-Assistant-initiated power-ons only.

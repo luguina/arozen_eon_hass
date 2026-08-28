@@ -14,8 +14,8 @@ where this file says ❓ it means ❓, and nothing downstream should round that 
 
 ## Why this file is not called `protocol.md`
 
-Because the protocol is not the unknown. On `sibling_ha_controller` that filename earned itself —
-the frame format, checksum and command set all had to be recovered before anything could be
+Because the protocol is not the unknown. On a project where it is, that filename earns itself —
+the frame format, checksum and command set all have to be recovered before anything can be
 written. Here the transport is **Tuya's local protocol on TCP 6668**: published, understood, and
 already implemented in `tinytuya`, `tuya-local` and LocalTuya. Nobody needs to decode a byte.
 
@@ -57,9 +57,9 @@ rather than assuming a match:
    is a **waterless, heatless cold-air nebuliser** — vendor copy is explicit about this — and
    those diffuse in *bursts*: a work period, then a pause. The natural control surface is a
    work/pause pair, and there is **no DP for that in the standard set at all**.
-2. **This is exactly the shape the sibling project turned out to have.** On that device intensity was not
-   a level; it was the run and pause durations, and the sibling project's own documentation said so. Two
-   different vendors, same physics, same likely control surface.
+2. **This is the shape a burst diffuser turns out to have.** On another such device intensity
+   was not a level at all; it was the run and pause durations, and the vendor's own
+   documentation said so. Two different vendors, same physics, same likely control surface.
 3. **`countdown` as an enum of 1–6** does not obviously match the vendor's stated timer options
    of 1, 2, 4, 8 hours or continuous. Close, but not the same shape.
 
@@ -121,8 +121,8 @@ Fill `How established` honestly. `"toggled power in app, DP 1 flipped"` is evide
 
 ## Method
 
-The technique is the same one that works for any undocumented control surface, and it is the
-one written into the sibling project's capture worksheet: **change exactly one control at a time, capture,
+The technique is the same one that works for any undocumented control surface, and it belongs at
+the top of any capture worksheet: **change exactly one control at a time, capture,
 diff.** Ten dumps that each vary one thing beat a hundred dumps of mixed activity.
 
 ### 1. Get the credentials
@@ -185,8 +185,8 @@ describes what the product was defined as, the dump describes what the firmware 
 
 ## Still unknown
 
-Kept as an explicit list because on the sibling project the equivalent section was what stopped
-half-answers being treated as answers.
+Kept as an explicit list because a section like this is what stops half-answers being treated
+as answers.
 
 - ~~**The ON command.**~~ ✅ **Resolved 2026-08-21 (evening).** It was DP 2 all along — the
   bool sitting in this very list as "unknown". Writing `true` starts the device; `false` stops
@@ -250,14 +250,14 @@ half-answers being treated as answers.
   control walk, a remote walk, an LED toggle and a charger event without moving, and every
   control the app exposes is mapped to a different DP. A firmware constant like DP 105 is the
   leading explanation, but that is an explanation, not a measurement, so it stays here.
-- ~~The intensity enum's full extent.~~ ✅ Closed by the manual (the project owner, 2026-08-21), then **measured in full** on the remote walk that night: L1–L6, pauses 1/3/5/10/20/40 min against a fixed 30 s emission, with DP 106 matching at every level. L5 — the one level no app walk ever produced — is now observed rather than sourced.
-- ~~The timer enum's full extent; why `3h` maps to 240 minutes.~~ ✅ Closed by the manual (the project owner, 2026-08-21): the device offers 1h / 4h / 8h / continuous — four settings, exactly the four DP values the walk produced. `"3h"` **is** the 4-hour setting, mislabelled in firmware. `2h` and `4h` never existed.
+- ~~The intensity enum's full extent.~~ ✅ Closed by the manual (2026-08-21), then **measured in full** on the remote walk that night: L1–L6, pauses 1/3/5/10/20/40 min against a fixed 30 s emission, with DP 106 matching at every level. L5 — the one level no app walk ever produced — is now observed rather than sourced.
+- ~~The timer enum's full extent; why `3h` maps to 240 minutes.~~ ✅ Closed by the manual (2026-08-21): the device offers 1h / 4h / 8h / continuous — four settings, exactly the four DP values the walk produced. `"3h"` **is** the 4-hour setting, mislabelled in firmware. `2h` and `4h` never existed.
 - Whether the schedule the app created lives anywhere readable. It moved **no** DP during the
   original control walk, and — tested again on 2026-08-21 (night) — creating *and then deleting*
   a schedule moved no DP either. Two independent attempts, nothing on the wire. That is about as
   close to settled as a negative gets: the schedule is cloud-side or app-side, not on-device, so
-  scheduling in Home Assistant is automations + the countdown DP, full stop (the sibling project's ADR-009
-  outcome, arrived at by a much shorter road). Left open rather than ticked because proving a DP
+  scheduling in Home Assistant is automations + the countdown DP, full stop — the same conclusion
+  others have reached the long way round. Left open rather than ticked because proving a DP
   *absent* needs a channel we have not checked, not just a walk that did not see it.
 - Whether writing a DP while the app is connected is accepted, rejected, or silently reverted
   — the contention seen during the write tests (null answers, one 914) is consistent with the

@@ -3,8 +3,8 @@
 Three kinds of sensor, deliberately:
 
 * **Failed polls** and **Intensity restores** — the two measurement channels that the
-  fixes above them would otherwise erase. Same reasoning as sibling_beacon's sensor.py: a fix
-  that hides a fault must ship with the meter that still records it. A tolerated poll failure
+  fixes above them would otherwise erase. The reasoning: a fix that hides a fault must ship
+  with the meter that still records it. A tolerated poll failure
   leaves no visible trace, and a *successful* intensity restore leaves no visible trace that
   the firmware threw the level away at all — so both get counted.
 * **Battery** (DP 101) and **countdown remaining** (DP 5) — real device readings,

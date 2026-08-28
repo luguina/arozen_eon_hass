@@ -187,8 +187,8 @@ CHARGING_STATES: Final = {
     CHARGING_COMPLETE: "complete",
 }
 
-#: Intensity level -> pause seconds. **Confirmed against the printed manual** (the project owner,
-#: 2026-08-21), which specifies a 30 s emission followed by a pause of 1/3/5/10/20/40
+#: Intensity level -> pause seconds. **Confirmed against the printed manual**
+#: (2026-08-21), which specifies a 30 s emission followed by a pause of 1/3/5/10/20/40
 #: minutes for L1-L6. Five of the six were also observed on the device via DP 106; L5 was
 #: never reached during the walk and had been interpolated at 1200 - the manual puts it at
 #: exactly 20 minutes, so the inference was right and is now sourced.

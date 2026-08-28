@@ -20,9 +20,10 @@ from .device import ArozenDevice
 
 _LOGGER = logging.getLogger(__name__)
 
-# No NUMBER platform: unlike the sibling project, intensity here is a single enum DP (DP 3), not a
-# settable work/pause pair - the pause seconds (DP 106) are a read-only mirror, exposed as
-# an attribute on the intensity select, and the burst length (DP 105) is fixed at 30 s.
+# No NUMBER platform: intensity here is a single enum DP (DP 3), not the settable work/pause
+# pair a burst diffuser often exposes - the pause seconds (DP 106) are a read-only mirror,
+# exposed as an attribute on the intensity select, and the burst length (DP 105) is fixed
+# at 30 s.
 #
 # SWITCH carries the two written DPs: power (DP 2) and the frontal LED (DP 7). On this device
 # "writable" is a measured property rather than an obvious one - DP 103 accepts writes and
@@ -147,10 +148,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ArozenConfigEntry) -> bo
             ", ".join(unmapped),
         )
 
-    # Deliberately async_refresh(), not async_config_entry_first_refresh() — same call the
-    # sibling project makes and for the same reason: a device that does not answer at startup should
-    # get entities that exist and read `unavailable`, not a config entry stuck in
-    # setup_retry with nothing on the dashboard at all.
+    # Deliberately async_refresh(), not async_config_entry_first_refresh(), and the reason is
+    # the failure it avoids: a device that does not answer at startup should get entities that
+    # exist and read `unavailable`, not a config entry stuck in setup_retry with nothing on
+    # the dashboard at all.
     await coordinator.async_refresh()
     if not coordinator.last_update_success:
         _LOGGER.info(

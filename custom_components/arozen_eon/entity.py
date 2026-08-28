@@ -30,10 +30,10 @@ class ArozenEntity(CoordinatorEntity[ArozenCoordinator]):
     def available(self) -> bool:
         """Fresh, or stale by no more than the tolerated number of missed polls.
 
-        Unlike the sibling project there is no presence signal cheaper than the poll itself, so this
-        is only the second of the sibling project's two gates: a single failed poll holds the previous
-        reading instead of going unavailable for a full interval (see PollHealth for why
-        that is honest rather than a lie).
+        There is no presence signal cheaper than the poll itself, so availability rests on
+        one gate rather than two: a single failed poll holds the previous reading instead of
+        going unavailable for a full interval (see PollHealth for why that is honest rather
+        than a lie).
 
         ``data is not None`` is the precondition: tolerating a failure *means* holding the
         previous reading, so with no previous reading there is nothing to hold.

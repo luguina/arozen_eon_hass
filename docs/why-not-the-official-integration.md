@@ -60,9 +60,9 @@ Home Assistant  ──WiFi/LAN──▶  Arozen EON Pro 2
 
 That is the whole topology. **There is no ESP32 and no proxy** — see
 [ADR-002](decisions.md#adr-002--no-esp32-the-device-is-already-on-the-network), which exists
-specifically so nobody copies the bridge out of `sibling_ha_controller` from habit. This device
-is already on the network the Home Assistant box is on; the range problem that dominated that
-project does not exist here.
+specifically so nobody copies a bridge across from habit. This device is already on the network
+the Home Assistant box is on; the range problem that makes a proxy necessary does not exist
+here.
 
 Control goes **direct to the device on the LAN**, encrypted with the `local_key`, with no cloud
 in the runtime path
