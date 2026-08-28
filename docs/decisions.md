@@ -270,7 +270,8 @@ sufficient and the scope narrows to Home-Assistant-initiated power-ons only.
 ## ADR-007 — Do not rewrite git history. Scrub at publication, on a fresh repository.
 
 **Status:** accepted · **Date:** 2026-08-22 · **Updated 2026-08-24 — publication decided, the
-public repository named `arozen_eon_hass`**
+public repository named `arozen_eon_hass`** ·
+**Updated 2026-08-28 — published; the public history is a regenerated artifact**
 
 **Context.** An audit that day found the repo breaking its own redaction rule
 (captures/README.md), which grants each identifier **one**
@@ -383,6 +384,42 @@ parenthetical repeated thirty times stops being read.
 A live link survives only where the target is something a public reader can actually open: upstream
 repositories, Home Assistant core, HACS. That is what the remaining links in these documents are,
 and it is the test to apply to a new one.
+
+**Update — 2026-08-28. Published. The public history is a regenerated artifact, not a mirror.**
+The push happened, and what it produced is worth naming precisely, because the obvious mental
+model of it is wrong. `arozen_eon_hass` is not this repository with some files withheld, and it is
+not a branch of it: `tools/scrub_for_publication.py` rebuilds the whole history from scratch,
+commit by commit, out of the archive filtered through `tools/published_set.txt`. The two share
+nothing — not a SHA, not a parent chain, not a root commit. `v0.1.0` is 83 commits over 43 files;
+this archive is 106 over 67.
+
+**Re-running the scrub is deterministic, and that property belongs to the manifest rather than to
+the tool.** With `tools/published_set.txt` unchanged a second run reproduces every SHA byte for
+byte — verified twice — so an ordinary update to the public repository is a fast-forward and
+behaves like any other push. **Change the manifest and it is not.** A file present in the root
+commit alters that commit's tree, which alters its SHA, which alters every commit after it; the
+histories then diverge at commit one, and the update is a force-push plus a tag move. That is the
+design working rather than a failure, but it is easy to promise a fast-forward on Monday and owe a
+force-push on Tuesday, so the question to ask before promising anything is whether the manifest
+moved. It moved on 2026-08-28, when `docs/decisions.md` and `docs/datapoints.md` were added to fix
+ADR references that 404'd for every public reader, and 77 commits over 40 files became 83 over 43.
+
+**A quieter consequence: `--replace-text` became load-bearing that day.** Until then it was
+insurance. No file that travelled had ever held a real device ID, so the path filter removed all
+three by construction and only `--replace-message` did observable work — which made the content
+substitution a guard nobody had watched fire. `docs/datapoints.md` carries this diffuser's ID in
+two commits of its own history and now travels, so the substitution is doing the job it was
+written for. The published objects were swept afterwards and hold none of the three IDs, in no
+blob, tree or commit message.
+
+**Sweep the archive too, every time, and require it to come back non-zero.** A check that says the
+artifact is clean is worth only as much as the run proving that check can still fail. The first
+sweep on 2026-08-28 reported zero occurrences in *both* repositories, which is impossible — this
+one holds the ID in dossier §6.2 on purpose — and the cause was the sweep erroring out on a binary
+object stream while its caller quietly turned the error into a zero. A redaction check that fails
+open is indistinguishable from a pass, and nothing downstream catches it. So the sweep runs twice
+over the same list: against the artifact, where it must find nothing, and against the archive,
+where it must find something.
 
 **What would change this.** Deciding to publish *this* repository, PR history and all, rather than a
 fresh one — at which point the calculation changes completely and the pull refs, not `main`, become
