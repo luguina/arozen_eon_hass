@@ -297,9 +297,19 @@ def _ihdr(path: Path) -> tuple[int, int, int, int]:
     this module is that it runs with nothing installed — parsing 33 bytes is cheaper than
     either a new pin or a skip that hides the check on the day it would have fired.
     """
-    raw = path.read_bytes()
+    with path.open("rb") as handle:
+        raw = handle.read(33)
+    # Length first, and as an assertion rather than as an IndexError three lines down. A
+    # truncated image is a plausible way for this to fail - a copy that died halfway, an
+    # asset committed from a partial download - and "index out of range" would send the
+    # reader to this function rather than to the file that is actually broken.
+    assert len(raw) == 33, f"{path.name} is {len(raw)} bytes, too short to hold a PNG header"
     assert raw[:8] == b"\x89PNG\r\n\x1a\n", f"{path.name} is not a PNG"
     assert raw[12:16] == b"IHDR", f"{path.name} does not start with an IHDR chunk"
+    assert int.from_bytes(raw[8:12], "big") == 13, (
+        f"{path.name}'s IHDR declares a length other than 13, so the fields below are not "
+        "where this reads them"
+    )
     width = int.from_bytes(raw[16:20], "big")
     height = int.from_bytes(raw[20:24], "big")
     return width, height, raw[24], raw[25]
@@ -334,20 +344,23 @@ def test_every_brand_image_present_is_the_size_the_spec_names(integration_dir: P
     )
 
 
-def test_the_logo_is_landscape_with_its_short_side_in_range(integration_dir: Path):
-    """`logo.png` is the one brand image the spec sizes by *ratio* rather than exactly.
+@pytest.mark.parametrize(("name", "low", "high"),
+                         (("logo.png", 128, 256), ("logo@2x.png", 256, 512)))
+def test_the_logo_is_landscape_with_its_short_side_in_range(
+    integration_dir: Path, name: str, low: int, high: int
+):
+    """The logos are the brand images the spec sizes by *ratio* rather than exactly.
 
-    Landscape, shortest side 128-256 (256-512 for @2x). It is optional, so absence is a
-    skip; being square is not, because a square logo is an icon filed under the wrong name
-    and Home Assistant will letterbox it wherever it expects a wordmark.
+    Landscape, shortest side 128-256 (256-512 for @2x). Parametrised rather than looped so
+    that "optional" really is a skip and reports as one per file: a loop that `continue`s
+    past a missing logo reports the same green as a loop that checked one, and the two are
+    not the same fact. Being square is not optional - a square logo is an icon filed under
+    the wrong name, and Home Assistant letterboxes it wherever it expects a wordmark.
     """
-    for name, (low, high) in (("logo.png", (128, 256)), ("logo@2x.png", (256, 512))):
-        path = integration_dir / "brand" / name
-        if not path.is_file():
-            continue
-        width, height, _, colour = _ihdr(path)
-        assert width > height, f"{name} is {width}x{height}, which is not landscape"
-        assert low <= height <= high, (
-            f"{name}'s short side is {height}; the spec says {low}-{high}"
-        )
-        assert colour == PNG_RGBA, f"{name} has PNG colour type {colour}, not {PNG_RGBA}"
+    path = integration_dir / "brand" / name
+    if not path.is_file():
+        pytest.skip(f"{name} is optional and not shipped")
+    width, height, _, colour = _ihdr(path)
+    assert width > height, f"{name} is {width}x{height}, which is not landscape"
+    assert low <= height <= high, f"{name}'s short side is {height}; the spec says {low}-{high}"
+    assert colour == PNG_RGBA, f"{name} has PNG colour type {colour}, not {PNG_RGBA}"
