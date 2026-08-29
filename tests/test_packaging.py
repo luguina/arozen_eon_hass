@@ -30,9 +30,16 @@ the 404s there are exactly what they always were.
 **These tests are not replaced by it, and the difference is not politeness.** They need no
 network and no repository, so they are the half that still runs on every pull request
 *here* — including the ones that break the manifest, which is where a packaging error is
-cheapest to catch. The action covers what a local test cannot reach: `brands`, `license`,
-and the schemas as HACS currently has them rather than as they were transcribed. Each is
-the other's blind spot.
+cheapest to catch. The action covers what a local test cannot reach: `license`, and the
+schemas as HACS currently has them rather than as they were transcribed. Each is the
+other's blind spot.
+
+`brands` used to be on that list and has moved across, which is worth saying because the
+boundary moved rather than the rule. A custom integration may now carry its own brand
+images (Home Assistant 2026.3.0), and HACS accepts them in place of the domain being
+registered in home-assistant/brands — so the files the check reads are in this tree, and a
+local test can read them too. The action still asks the question the way HACS asks it; the
+tests below assert the sizes, which is the half that goes wrong quietly.
 """
 
 from __future__ import annotations
@@ -257,3 +264,103 @@ def test_every_platform_the_integration_forwards_has_a_module(integration_dir: P
         assert (integration_dir / f"{platform}.py").is_file(), (
             f"__init__.py forwards to {platform!r}, but {platform}.py does not exist"
         )
+
+
+#: The brand images HACS's `brands` validator accepts in place of the domain being
+#: registered in home-assistant/brands, and the exact size each one has to be. `icon.png`
+#: is the only required entry; the rest are optional and are asserted only if present, so
+#: dropping one is a decision rather than a test failure, and mis-sizing one is not.
+#:
+#: Sizes are from the brands repository's own README. A wrong size is the realistic
+#: regression here — somebody re-exports an image and it comes out 250x250, or flattened
+#: to RGB against a white background, and the failure surfaces as a rejected submission
+#: months later rather than as a red run.
+BRAND_IMAGES = {
+    "icon.png": (256, 256),
+    "icon@2x.png": (512, 512),
+    "dark_icon.png": (256, 256),
+    "dark_icon@2x.png": (512, 512),
+}
+
+#: PNG colour type 6 is truecolour with alpha. Asserted because transparency is what makes
+#: an icon usable on both Home Assistant themes, and a flatten is invisible in a file
+#: listing: the dimensions still pass, the bytes are still a PNG, and the icon quietly
+#: acquires a white box around it on the dark theme.
+PNG_RGBA = 6
+
+
+def _ihdr(path: Path) -> tuple[int, int, int, int]:
+    """(width, height, bit depth, colour type) from a PNG's header, without Pillow.
+
+    Read from the bytes rather than through an image library on purpose. Pillow reaches
+    this suite only as a transitive dependency of `homeassistant`, and the whole point of
+    this module is that it runs with nothing installed — parsing 33 bytes is cheaper than
+    either a new pin or a skip that hides the check on the day it would have fired.
+    """
+    with path.open("rb") as handle:
+        raw = handle.read(33)
+    # Length first, and as an assertion rather than as an IndexError three lines down. A
+    # truncated image is a plausible way for this to fail - a copy that died halfway, an
+    # asset committed from a partial download - and "index out of range" would send the
+    # reader to this function rather than to the file that is actually broken.
+    assert len(raw) == 33, f"{path.name} is {len(raw)} bytes, too short to hold a PNG header"
+    assert raw[:8] == b"\x89PNG\r\n\x1a\n", f"{path.name} is not a PNG"
+    assert raw[12:16] == b"IHDR", f"{path.name} does not start with an IHDR chunk"
+    assert int.from_bytes(raw[8:12], "big") == 13, (
+        f"{path.name}'s IHDR declares a length other than 13, so the fields below are not "
+        "where this reads them"
+    )
+    width = int.from_bytes(raw[16:20], "big")
+    height = int.from_bytes(raw[20:24], "big")
+    return width, height, raw[24], raw[25]
+
+
+def test_the_required_brand_icon_exists(integration_dir: Path):
+    """HACS's `brands` check passes on this file, and only this file is required.
+
+    Without it the check fails, and the workflow may not paper over that with `ignore:`
+    — HACS's default store requires its action to pass with no ignores at all, so a
+    suppressed check and a failing one cost exactly the same thing.
+    """
+    assert (integration_dir / "brand" / "icon.png").is_file(), (
+        "custom_components/<domain>/brand/icon.png is what satisfies HACS's brands check "
+        "for a custom integration that is not registered in home-assistant/brands"
+    )
+
+
+@pytest.mark.parametrize("name", sorted(BRAND_IMAGES))
+def test_every_brand_image_present_is_the_size_the_spec_names(integration_dir: Path, name: str):
+    path = integration_dir / "brand" / name
+    if not path.is_file():
+        pytest.skip(f"{name} is optional and not shipped")
+    width, height, depth, colour = _ihdr(path)
+    assert (width, height) == BRAND_IMAGES[name], (
+        f"{name} is {width}x{height}, the brands spec says {BRAND_IMAGES[name]}"
+    )
+    assert depth == 8, f"{name} is {depth}-bit; the spec's sizes assume 8"
+    assert colour == PNG_RGBA, (
+        f"{name} has PNG colour type {colour}, not {PNG_RGBA} (truecolour with alpha) — "
+        "it has been flattened, and will show a solid box on one of the two themes"
+    )
+
+
+@pytest.mark.parametrize(("name", "low", "high"),
+                         (("logo.png", 128, 256), ("logo@2x.png", 256, 512)))
+def test_the_logo_is_landscape_with_its_short_side_in_range(
+    integration_dir: Path, name: str, low: int, high: int
+):
+    """The logos are the brand images the spec sizes by *ratio* rather than exactly.
+
+    Landscape, shortest side 128-256 (256-512 for @2x). Parametrised rather than looped so
+    that "optional" really is a skip and reports as one per file: a loop that `continue`s
+    past a missing logo reports the same green as a loop that checked one, and the two are
+    not the same fact. Being square is not optional - a square logo is an icon filed under
+    the wrong name, and Home Assistant letterboxes it wherever it expects a wordmark.
+    """
+    path = integration_dir / "brand" / name
+    if not path.is_file():
+        pytest.skip(f"{name} is optional and not shipped")
+    width, height, _, colour = _ihdr(path)
+    assert width > height, f"{name} is {width}x{height}, which is not landscape"
+    assert low <= height <= high, f"{name}'s short side is {height}; the spec says {low}-{high}"
+    assert colour == PNG_RGBA, f"{name} has PNG colour type {colour}, not {PNG_RGBA}"
