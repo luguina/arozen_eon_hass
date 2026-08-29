@@ -66,16 +66,24 @@ jobs:
       - uses: hacs/action@main
         with:
           category: integration
-          # `brands` looks for an icon and a logo under this domain in home-assistant/brands,
-          # and there are none. Submitting them is deliberately not done: brand assets are
-          # required for HACS's *default store* and optional for a custom repository, which is
-          # how this is installed, and the cost is artwork rather than code. Recorded as a
-          # decision rather than left to look like an oversight — deleting this one word is
-          # the whole of the change if the default store is ever pursued.
-          ignore: brands
-          # Both of those were checked against the action rather than against its README.
+          # `ignore: brands` used to sit here, and the note under it said deleting the one
+          # word was the whole of the change if the default store were ever pursued. It was
+          # pursued, and that turned out to be true — but only because the assets stopped
+          # having to go through home-assistant/brands. Since Home Assistant 2026.3.0 a custom
+          # integration may carry its own brand images, and HACS accepts them in place of the
+          # domain being registered there, so `custom_components/arozen_eon/brand/` is what
+          # satisfies this check now: `icon.png` required, the dark and @2x variants not.
+          #
+          # The ignore had to go regardless of how the assets arrived. HACS's default store
+          # requires the action to pass **with no ignores at all**, so a suppressed check and
+          # a failing one disqualify a submission equally — which makes an `ignore:` line the
+          # one form of green that cannot be traded against anything.
+          #
+          # `category` is checked against the action rather than against its README, and two
+          # findings from doing that are kept here because they cost a source read each.
           # `INPUT_IGNORE` is read in custom_components/hacs/validate/manager.py and matched
-          # against each validator's module name, so `brands` is the token that works. The
-          # `comment` input documented beside it is read *nowhere* in hacs/integration — it
-          # is vestigial, so it is not set here, and this workflow needs no
-          # `pull-requests: write` for a comment the action has no code to post.
+          # against each validator's *module* name, so `brands` was the token that worked —
+          # worth recording for whoever needs to suppress a different check one day, since
+          # the README does not say it. The `comment` input documented beside it is read
+          # *nowhere* in hacs/integration: it is vestigial, so it is not set, and this
+          # workflow needs no `pull-requests: write` for a comment nothing can post.
